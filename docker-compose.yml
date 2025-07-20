@@ -1,0 +1,52 @@
+# NOTE: all services here are in the same network.
+# so you can reference another container/service by its name!
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    env_file:
+      - .env.example
+    # this is unnecessary for this database container (but for development sake just in case)
+    stdin_open: true
+    tty: true
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend:/app
+      # FIX: each rebuild it make a new anonymous volume that should be rmoved manually
+      - /app/node_modules #if my local machine has node_modules don't overwrite node_modules inside the contianer
+    ports:
+      - "3000:3000"
+    # this is unnecessary for this database container (but for development sake just in case)
+    stdin_open: true
+    tty: true
+
+  postgres:
+    image: postgres:15
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    ports:
+      # don't really need to expose the port to the host. but just in case
+      # we want to run pg-admin against it for debugging.
+      - "55555:5432"
+    # this is unnecessary for this database container (but for development sake just in case)
+    stdin_open: true
+    tty: true
+
+# instructs Docker Compose to create the named
+# volume postgres_data if it doesn't already exist.
+# This is because one or more services reference this volume in their configuration.
+volumes:
+  # Using a named volume for your database is best practice
+  # to ensure your data persists independently of the container lifecycle.
+  postgres_data:
