@@ -1,15 +1,11 @@
-from typing import Union
-
+from database import engine
 from fastapi import FastAPI
+from database import Base
+
+# This needs to be imported before we call create on Base.metadata
+# because it registers the models with SQLAlchemy
+import models
 
 app = FastAPI()
 
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+Base.metadata.create_all(bind=engine)

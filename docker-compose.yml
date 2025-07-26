@@ -11,7 +11,7 @@ services:
       - postgres
     env_file:
       - .env.example
-    # this is unnecessary for this database container (but for development sake just in case)
+    # this is unnecessary for this backend container (but for development sake just in case)
     stdin_open: true
     tty: true
 
@@ -23,7 +23,7 @@ services:
       - /app/node_modules #if my local machine has node_modules don't overwrite node_modules inside the contianer
     ports:
       - "3000:3000"
-    # this is unnecessary for this database container (but for development sake just in case)
+    # this is unnecessary for this frontend container (but for development sake just in case)
     stdin_open: true
     tty: true
 
