@@ -1,5 +1,5 @@
 from sqlalchemy import Table, Column, ForeignKey, String, Integer, Boolean, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from . import Base
 
 
@@ -24,10 +24,10 @@ class CandidateParticipation(Base):
     )
 
     # Relationships
-    candidate: Mapped["Candidate"] = mapped_column(
+    candidate: Mapped["Candidate"] = relationship(
         "Candidate", back_populates="participations"
     )
 
-    election: Mapped["Election"] = mapped_column(
+    election: Mapped["Election"] = relationship(
         "Election", back_populates="participations"
     )

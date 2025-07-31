@@ -6,7 +6,7 @@ from sqlalchemy import Integer, ForeignKey, String
 class Voter(Base):
     __tablename__ = "voters"
 
-    voter_hashed_id: Mapped[int] = mapped_column(String(200), primary_key=True)
+    voter_hashed_national_id: Mapped[int] = mapped_column(String(200), primary_key=True)
 
     phone_number: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
 
