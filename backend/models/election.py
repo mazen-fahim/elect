@@ -15,16 +15,6 @@ class Election(Base):
         index=True,
     )
 
-    org_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("organizations.user_id", ondelete="CASCADE"),
-    )
-
-    org_admin_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("organization_admins.user_id", ondelete="CASCADE"),
-    )
-
     types: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[str] = mapped_column(
         String(200),
@@ -48,9 +38,32 @@ class Election(Base):
     num_of_votes_per_voter: Mapped[int] = mapped_column(Integer, nullable=False)
     potential_number_of_voters: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # Forign Keys
+    organization_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("organizations.user_id", ondelete="CASCADE"),
+    )
+
+    organization_admin_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("organization_admins.user_id", ondelete="CASCADE"),
+    )
+
     # Relationships
+    organization: Mapped["Organization"] = relationship(
+        "Organization", back_populates="elections"
+    )
+
+    organization_admin: Mapped["OrganizationAdmin"] = relationship(
+        "OrganizationAdmin", back_populates="elections"
+    )
+
     voting_processes: Mapped["VotingProcess"] = relationship(
         "VotingProcess", back_populates="election"
     )
 
     voters: Mapped["Voter"] = relationship("Voter", back_populates="election")
+
+    participations: Mapped["CandidateParticipation"] = relationship(
+        "CandidateParticipation", back_populates="election"
+    )
