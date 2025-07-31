@@ -27,10 +27,12 @@ class User(Base):
         DateTime(timezone=True), nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # 1 to 1 relationshiop with Organization (The user may be an organization)
+
+    # Relationships
     organization: Mapped["Organization"] = relationship(
         "Organization", back_populates="user", uselist=False
     )
+
     organization_admin: Mapped["OrganizationAdmin"] = relationship(
         "OrganizationAdmin", back_populates="user", uselist=False
     )
