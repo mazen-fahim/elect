@@ -1,11 +1,9 @@
 from database import Base
-from . import (
-    user,
-    organization,
-    organization_admin,
-    voter,
-    voting_porcess,
-    candidate,
-    candidate_participation,
-    election,
-)
+from .user import User
+from .organization import Organization
+from .organization_admin import OrganizationAdmin
+from .voter import Voter
+from .voting_process import VotingProcess
+from .candidate import Candidate
+from .candidate_participation import CandidateParticipation
+from .election import Election
