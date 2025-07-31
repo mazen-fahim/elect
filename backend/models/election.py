@@ -34,9 +34,18 @@ class Election(Base):
     )
 
     total_vote_count: Mapped[int] = mapped_column(Integer, nullable=True)
-    number_of_candidates: Mapped[int] = mapped_column(Integer, number=True)
-    num_of_votes_per_voter: Mapped[int] = mapped_column(Integer, nullable=False)
-    potential_number_of_voters: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    number_of_candidates: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+
+    num_of_votes_per_voter: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1
+    )
+
+    potential_number_of_voters: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
 
     # Forign Keys
     organization_id: Mapped[int] = mapped_column(
