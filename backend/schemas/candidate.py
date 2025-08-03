@@ -30,7 +30,9 @@ class CandidateRead(CandidateBase):
     create_req_status : Status 
     create_at : datetime
 
-    participations : List[CandidateParticipation]
+    participations : List[CandidateParticipation] = []
+    organization : "Organization"
+    organization_admin : Optional["OrganizationAdmin"] = None 
     class Config: 
         orm_mode = True
 
