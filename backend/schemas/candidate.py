@@ -1,6 +1,5 @@
 from pydantic import BaseModel , HttpUrl
 from typing import Optional , List, TYPE_CHECKING
-from datetime import date
 from ..core.shared import Status , Country 
 from datetime import datetime
 from ..models.candidate_participation import CandidateParticipation
@@ -15,10 +14,13 @@ class CandidateBase(BaseModel):
     governorate : Optional[str] = None
     country : Country 
     party : str 
+    organization_id: int
     symbol_icon_url : Optional[HttpUrl] = None
+    symbol_name: Optional[str] = None
     photo_url : Optional[HttpUrl] = None 
-    birth_date : Optional[date] = None
+    birth_date: datetime
     description : Optional[str] = None
+    organization_admin_id: Optional[int] = None 
 
 class CandidateCreate(CandidateBase):
     pass 
@@ -35,6 +37,7 @@ class CandidateRead(CandidateBase):
     organization_admin : Optional["OrganizationAdmin"] = None 
     class Config: 
         orm_mode = True
+        use_enum_values = True
 
 
 
