@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy. future import select 
 from typing import List
 from ..database import get_db  
+from sqlalchemy.orm import selectinload
 from ..models import Candidate
 from ..schemas.candidate import CandidateCreate , CandidateRead 
 
@@ -29,3 +30,34 @@ async def create_candidate(candidate_in : CandidateCreate , db: AsyncSession = D
     await db.commit()
     await db.refresh(new_candidate)
     
+@router.get("/" , response_model = List[CandidateRead])
+async def get_all_candidates(skip : int = 0 ,limit : int = 100 , db : AsyncSession = Depends(get_db)):
+    
+    query = (select(Candidate)
+             .offset(skip).limit(limit)
+             .options( selectinload(Candidate.participations),
+                      selectinload(Candidate.organization)))
+    
+    result = await db.exexute(query)
+    candidates = result.scalars().all()
+    return candidates
+
+@router.get("/{hashed_national_id}", response_model = CandidateRead)
+async def get_candidate_by_id(hashed_national_id : str , db : AsyncSession = Depends(get_db)):
+
+    query = (select(Candidate).where(Candidate.hashed_national_id == hashed_national_id)
+             .options(selectinload(Candidate.participations),
+                      selectinload(Candidate.organization),
+                      selectinload(Candidate.organization_admin)))
+    
+    result = await db.execute(query)
+    candidate = result.scalars().first()
+
+    if not candidate :
+        raise HTTPException(status_code = status.HTTP_404_NOT_FOUND,
+                            detail = "Candidate not found ")
+    
+    return candidate
+
+
+
