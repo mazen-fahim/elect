@@ -1,0 +1,61 @@
+# routers/voting_process.py
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from typing import List
+
+from models.voting_process import VotingProcess
+from database import get_db
+from schemas.voting_process import VotingProcessCreate, VotingProcessOut
+
+router = APIRouter(prefix="/voting-processes", tags=["voting_processes"])
+
+@router.post("/", response_model=VotingProcessOut, status_code=status.HTTP_201_CREATED)
+async def create_voting_process(
+    process_data: VotingProcessCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if voting process already exists
+    result = await db.execute(
+        select(VotingProcess).where(
+            VotingProcess.voter_hashed_national_id == process_data.voter_hashed_national_id,
+            VotingProcess.election_id == process_data.election_id
+        )
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Voting process already exists"
+        )
+
+    new_process = VotingProcess(**process_data.dict())
+    db.add(new_process)
+    await db.commit()
+    await db.refresh(new_process)
+    
+    # Include election status in response
+    process_out = new_process
+    process_out.election_status = new_process.election.status
+    return process_out
+
+@router.get("/{voter_id}", response_model=VotingProcessOut)
+async def get_voting_process(
+    voter_id: str,
+    election_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(VotingProcess).where(
+            VotingProcess.voter_hashed_national_id == voter_id,
+            VotingProcess.election_id == election_id
+        )
+    )
+    process = result.scalar_one_or_none()
+    if not process:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Voting process not found"
+        )
+    
+    process.election_status = process.election.status
+    return process
