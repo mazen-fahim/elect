@@ -1,4 +1,3 @@
-# schemas/voter.py
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional
