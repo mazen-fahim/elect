@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from models.organization import Organization
-from database import get_db  
+from database import get_db
+from database import db_dependency
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
 @router.get("/")
-def get_all_organizations(db: Session = Depends(get_db)):
-    return db.query(Organization).all()
-
-
-
+async def get_all_organizations(db: db_dependency):
+    result = await db.execute(select(Organization))
+    return result.scalars().all()
