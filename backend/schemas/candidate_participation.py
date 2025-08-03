@@ -16,4 +16,5 @@ class CandidateParticipationCreate(CandidateParticipationBase):
 class CandidateParticipationRead(CandidateParticipationBase):
     class Config : 
         orm_mode = True 
-        
+
+       

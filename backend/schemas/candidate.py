@@ -4,6 +4,7 @@ from ..core.shared import Status , Country
 from datetime import datetime
 from ..models.candidate_participation import CandidateParticipation
 
+
 if TYPE_CHECKING:
     from ..models.organization import Organization
     from ..models.organization_admin import OrganizationAdmin
