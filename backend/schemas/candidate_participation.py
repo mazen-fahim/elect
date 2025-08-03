@@ -9,4 +9,11 @@ class CandidateParticipationBase(BaseModel):
     has_won : Optional[bool] = None
     rank : Optional[str] = None
 
-    
+
+class CandidateParticipationCreate(CandidateParticipationBase):
+    pass 
+
+class CandidateParticipationRead(CandidateParticipationBase):
+    class Config : 
+        orm_mode = True 
+        
