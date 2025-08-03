@@ -2,8 +2,8 @@ line-length = 120
 indent-width = 4
 
 target-version = "py311"
-select = ["E", "F", "I", "UP", "B", "C4", "TID", "SIM", "PL"]
-ignore = ["E501"]
+lint.select = ["E", "F", "I", "UP", "B", "C4", "TID", "SIM", "PL"]
+lint.ignore = ["E501"]
 
 fix = true
-extend-select = ["I"]
+lint.extend-select = ["I"]
