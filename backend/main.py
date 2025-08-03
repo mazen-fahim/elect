@@ -1,6 +1,6 @@
 # main.py
 from fastapi import FastAPI
-from routers import organization,election
+from routers import organization,election,voter,voting_process
 
 # This needs to be imported before we call create on Base.metadata
 # because it registers the models with SQLAlchemy
@@ -17,5 +17,7 @@ async def startup():
 
 app.include_router(organization.router)
 app.include_router(election.router)
+app.include_router(voter.router)
+app.include_router(voting_process.router)
 
 
