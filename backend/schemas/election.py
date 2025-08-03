@@ -1,18 +1,17 @@
 from pydantic import BaseModel, validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 class ElectionBase(BaseModel):
     title: str
     types: str
     organization_id: str
-    orgnization_admin_id: str
+    organization_admin_id:str
     starts_at: datetime
     ends_at: datetime
     num_of_votes_per_voter: int
     potential_number_of_voters: int
 
-    # Add the validator here in the base class so it applies to all schemas that include these fields
     @validator('ends_at')
     def validate_dates(cls, ends_at, values):
         if 'starts_at' in values and ends_at <= values['starts_at']:
@@ -32,10 +31,9 @@ class ElectionUpdate(BaseModel):
     num_of_votes_per_voter: Optional[int] = None
     potential_number_of_voters: Optional[int] = None
 
-    # Also add it here for partial updates that might include dates
     @validator('ends_at')
     def validate_dates_update(cls, ends_at, values):
-        if 'starts_at' in values and ends_at is not None and values['starts_at'] is not None:
+        if 'starts_at' in values and ends_at and values['starts_at']:
             if ends_at <= values['starts_at']:
                 raise ValueError('End date must be after start date')
         return ends_at
