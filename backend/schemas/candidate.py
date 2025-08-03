@@ -14,5 +14,8 @@ class CandidateBase(BaseModel):
     photo_url : Optional[HttpUrl] = None 
     birth_date : Optional[date] = None
     description : Optional[str] = None
-    
-     
+
+class CandidateCreate(CandidateBase):
+    pass 
+
+
