@@ -8,8 +8,5 @@ import models
 
 app = FastAPI()
 
-models.Base.metadata.create_all(bind=engine)
 
 app.include_router(organization.router)
-
-
