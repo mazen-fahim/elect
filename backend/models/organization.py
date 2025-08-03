@@ -1,3 +1,4 @@
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from . import Base
 from sqlalchemy import ForeignKey, Integer, Numeric, String, Enum
