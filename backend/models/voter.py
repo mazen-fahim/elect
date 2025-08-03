@@ -1,6 +1,12 @@
-from . import Base
+from typing import TYPE_CHECKING
+
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import Integer, ForeignKey, String
+
+from . import Base
+
+if TYPE_CHECKING:
+    from .election import Election
 
 
 class Voter(Base):
@@ -11,9 +17,7 @@ class Voter(Base):
     phone_number: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
 
     # Foreign Keys
-    election_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("elections.id", ondelete="CASCADE")
-    )
+    election_id: Mapped[int] = mapped_column(Integer, ForeignKey("elections.id", ondelete="CASCADE"))
 
     # Relationships
     election: Mapped["Election"] = relationship("Election", back_populates="voters")
