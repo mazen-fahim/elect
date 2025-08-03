@@ -7,7 +7,6 @@ from database import db_dependency
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
-
 @router.get("/")
 async def get_all_organizations(db: db_dependency):
     result = await db.execute(select(Organization))

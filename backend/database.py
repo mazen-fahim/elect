@@ -1,3 +1,6 @@
+# database.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
 from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -5,8 +8,6 @@ from sqlalchemy.orm import DeclarativeMeta
 from sqlalchemy.ext.declarative import declarative_base
 import os
 
-# I get these values from the environment variables
-# set in the docker-compose file
 db_user = os.environ.get("POSTGRES_USER")
 db_password = os.environ.get("POSTGRES_PASSWORD")
 db_name = os.environ.get("POSTGRES_DB")
