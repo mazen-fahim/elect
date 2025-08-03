@@ -19,3 +19,8 @@ class CandidateCreate(CandidateBase):
     pass 
 
 
+class CandidateRead(CandidateBase):
+    class Config: 
+        orm_mode = True
+
+        
