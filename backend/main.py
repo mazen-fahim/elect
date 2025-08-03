@@ -15,4 +15,3 @@ app.include_router(organization.router)
 app.include_router(election.router)
 
 
-
