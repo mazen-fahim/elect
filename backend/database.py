@@ -1,28 +1,20 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeMeta, sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
+# database.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-# I get these values from the environment variables
-# set in the docker-compose file
 db_user = os.environ.get("POSTGRES_USER")
 db_password = os.environ.get("POSTGRES_PASSWORD")
 db_name = os.environ.get("POSTGRES_DB")
 
-SQLALCHEMY_DATABASE_URL = (
-    f"postgresql://{db_user}:{db_password}@postgres:5432/{db_name}"
-)
+# Use asyncpg driver for PostgreSQL
+SQLALCHEMY_DATABASE_URL = f"postgresql+asyncpg://{db_user}:{db_password}@postgres:5432/{db_name}"
 
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+engine = create_async_engine(SQLALCHEMY_DATABASE_URL, echo=True)
+SessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-Base: DeclarativeMeta = declarative_base()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
+async def get_db():
+    async with SessionLocal() as db:
         yield db
-    finally:
-        db.close()
