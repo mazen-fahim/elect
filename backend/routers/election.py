@@ -15,6 +15,7 @@ async def get_all_elections(db: AsyncSession = Depends(get_db)):
     elections = result.scalars().all()
     return elections
 
+
 @router.get("/{election_id}", response_model=ElectionOut)
 async def get_specific_election(election_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Election).where(Election.id == election_id))
@@ -68,6 +69,7 @@ async def update_election(election_id: int, election_data: ElectionUpdate, db: A
     await db.refresh(election)
     return election
 
+
 @router.delete("/{election_id}", status_code=204)
 async def delete_election(election_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Election).where(Election.id == election_id))
@@ -78,4 +80,3 @@ async def delete_election(election_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(election)
     await db.commit()
     return None
-
