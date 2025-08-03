@@ -1,5 +1,6 @@
 import enum
 
+
 class Country(enum.Enum):
     Afghanistan = "Afghanistan"
     Albania = "Albania"
@@ -196,6 +197,7 @@ class Country(enum.Enum):
     Yemen = "Yemen"
     Zambia = "Zambia"
     Zimbabwe = "Zimbabwe"
+
 
 class Status(enum.Enum):
     pending = "pending"

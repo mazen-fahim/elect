@@ -1,44 +1,45 @@
-from pydantic import BaseModel , HttpUrl
-from typing import Optional , List, TYPE_CHECKING
-from ..core.shared import Status , Country 
 from datetime import datetime
-from ..models.candidate_participation import CandidateParticipation
+from typing import TYPE_CHECKING, Optional
 
+from pydantic import BaseModel, HttpUrl
+
+from core.shared import Country, Status
+from models.candidate_participation import CandidateParticipation
 
 if TYPE_CHECKING:
-    from ..models.organization import Organization
-    from ..models.organization_admin import OrganizationAdmin
+    from models.organization import Organization
+    from models.organization_admin import OrganizationAdmin
+
+
 class CandidateBase(BaseModel):
-    hashed_national_id : str 
-    name : str 
-    district : Optional[str] = None
-    governorate : Optional[str] = None
-    country : Country 
-    party : str 
+    hashed_national_id: str
+    name: str
+    district: str | None = None
+    governorate: str | None = None
+    country: Country
+    party: str
     organization_id: int
-    symbol_icon_url : Optional[HttpUrl] = None
-    symbol_name: Optional[str] = None
-    photo_url : Optional[HttpUrl] = None 
+    symbol_icon_url: HttpUrl | None = None
+    symbol_name: str | None = None
+    photo_url: HttpUrl | None = None
     birth_date: datetime
-    description : Optional[str] = None
-    organization_admin_id: Optional[int] = None 
+    description: str | None = None
+    organization_admin_id: int | None = None
+
 
 class CandidateCreate(CandidateBase):
-    pass 
+    pass
 
 
 class CandidateRead(CandidateBase):
+    id: str
+    create_req_status: Status
+    create_at: datetime
 
-    id : str
-    create_req_status : Status 
-    create_at : datetime
+    participations: list[CandidateParticipation] = []
+    organization: "Organization"
+    organization_admin: Optional["OrganizationAdmin"] = None
 
-    participations : List[CandidateParticipation] = []
-    organization : "Organization"
-    organization_admin : Optional["OrganizationAdmin"] = None 
-    class Config: 
+    class Config:
         orm_mode = True
         use_enum_values = True
-
-
-
