@@ -1,6 +1,13 @@
-from sqlalchemy import Table, Column, ForeignKey, String, Integer, Boolean, DateTime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from . import Base
+
+if TYPE_CHECKING:
+    from .candidate import Candidate
+    from .election import Election
 
 
 class CandidateParticipation(Base):
@@ -19,15 +26,9 @@ class CandidateParticipation(Base):
         primary_key=True,
     )
 
-    election_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("elections.id", ondelete="CASCADE"), primary_key=True
-    )
+    election_id: Mapped[int] = mapped_column(Integer, ForeignKey("elections.id", ondelete="CASCADE"), primary_key=True)
 
     # Relationships
-    candidate: Mapped["Candidate"] = relationship(
-        "Candidate", back_populates="participations"
-    )
+    candidate: Mapped["Candidate"] = relationship("Candidate", back_populates="participations")
 
-    election: Mapped["Election"] = relationship(
-        "Election", back_populates="participations"
-    )
+    election: Mapped["Election"] = relationship("Election", back_populates="participations")
