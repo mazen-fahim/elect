@@ -1,8 +1,8 @@
-"""Initialize Models
+"""Initalize models
 
-Revision ID: 80b57ecb152e
+Revision ID: 5c61e3ccd262
 Revises: 
-Create Date: 2025-08-02 17:56:21.479353
+Create Date: 2025-08-04 02:54:05.468739
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '80b57ecb152e'
+revision: str = '5c61e3ccd262'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -24,9 +24,8 @@ def upgrade() -> None:
     op.create_table('users',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(length=200), nullable=False),
-    sa.Column('name', sa.String(length=200), nullable=False),
-    sa.Column('hashed_password', sa.String(length=200), nullable=False),
-    sa.Column('role', sa.Enum('admin', 'org', 'org_admin', name='userrole'), nullable=False),
+    sa.Column('password', sa.String(length=200), nullable=False),
+    sa.Column('role', sa.Enum('admin', 'organization', 'organization_admin', name='userrole'), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('last_access_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
@@ -47,11 +46,15 @@ def upgrade() -> None:
     sa.UniqueConstraint('name')
     )
     op.create_table('organization_admins',
+    sa.Column('first_name', sa.String(length=200), nullable=False),
+    sa.Column('last_name', sa.String(length=200), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('organization_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('user_id')
+    sa.PrimaryKeyConstraint('user_id'),
+    sa.UniqueConstraint('first_name'),
+    sa.UniqueConstraint('last_name')
     )
     op.create_table('candidates',
     sa.Column('hashed_national_id', sa.String(length=200), nullable=False),
@@ -81,7 +84,7 @@ def upgrade() -> None:
     sa.Column('title', sa.String(length=200), nullable=False),
     sa.Column('starts_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('ends_at', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default='now()', nullable=False),
     sa.Column('total_vote_count', sa.Integer(), nullable=True),
     sa.Column('number_of_candidates', sa.Integer(), nullable=False),
     sa.Column('num_of_votes_per_voter', sa.Integer(), nullable=False),
