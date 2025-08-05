@@ -1,14 +1,35 @@
 import React from 'react';
+import webSocketService from '../services/webSocketService';
 import { useApp } from '../context/AppContext';
 import { Calendar, Users, Vote, Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
+const ElectionCard = ({ election, onVote }) => {
+    const { organizations, candidates } = useApp();
+    const [liveUpdate, setLiveUpdate] = useState(null);
 
-let ElectionCard = ({ election, onVote }) => {
-    let { organizations, candidates } = useApp();
+    const organization = organizations.find((org) => org.id === election.organizationId);
+    const electionCandidates = candidates.filter((c) => election.candidates.includes(c.id));
 
-    let organization = organizations.find((org) => org.id === election.organizationId);
-    let electionCandidates = candidates.filter((c) => election.candidates.includes(c.id));
+    useEffect(() => {
+        if (election.status !== 'active') return;
 
-    let getStatusColor = (status) => {
+        const handleVoteUpdate = (data) => {
+            if (data.electionId === election.id) {
+                setLiveUpdate({
+                    votes: data.totalVotes,
+                    time: new Date(data.timestamp).toLocaleTimeString()
+                });
+            }
+        };
+
+        webSocketService.registerCallback('VOTE_UPDATE', handleVoteUpdate);
+
+        return () => {
+            webSocketService.unregisterCallback('VOTE_UPDATE');
+        };
+    }, [election]);
+
+    const getStatusColor = (status) => {
         switch (status) {
             case 'active':
                 return 'bg-green-100 text-green-800 border-green-200';
@@ -21,7 +42,7 @@ let ElectionCard = ({ election, onVote }) => {
         }
     };
 
-    let getTypeLabel = (type) => {
+    const getTypeLabel = (type) => {
         switch (type) {
             case 'simple':
                 return 'Simple Election';
@@ -50,6 +71,12 @@ let ElectionCard = ({ election, onVote }) => {
                             {election.status.charAt(0).toUpperCase() + election.status.slice(1)}
                         </span>
                     </div>
+                    {liveUpdate && (
+                        <div className="absolute top-2 right-2 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full flex items-center">
+                            <span className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                            {liveUpdate.votes} votes
+                        </div>
+                    )}
                 </div>
 
                 <p className="text-gray-600 mb-4 line-clamp-2">{election.description}</p>
@@ -101,4 +128,6 @@ let ElectionCard = ({ election, onVote }) => {
 };
 
 export default ElectionCard;
+
+
 
