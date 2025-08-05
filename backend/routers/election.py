@@ -1,8 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.future import select
 
-from fastapi import APIRouter, HTTPException, status, WebSocket, WebSocketDisconnect
-
 from database import db_dependency
 from models.election import Election
 from schemas.election import ElectionCreate, ElectionOut, ElectionUpdate
@@ -86,20 +84,3 @@ async def delete_election(election_id: int, db: db_dependency):
     await db.delete(election)
     await db.commit()
 
-
-@router.websocket("/ws/status/{election_id}")
-async def election_status_ws(
-    websocket: WebSocket, 
-    election_id: int,
-    token: str = Query(...)
-):
-    if not await manager.authenticate_connection(websocket, token):
-        return
-    
-    await manager.connect(websocket, election_id)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            # Validate message format here
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, election_id)
