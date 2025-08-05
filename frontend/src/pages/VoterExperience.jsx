@@ -1,19 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Search, Vote, Calendar, Users, ExternalLink } from 'lucide-react';
+import { Search, Vote, Calendar, Users, ExternalLink, AlertCircle } from 'lucide-react';
 import VoterAuthForm from '../components/VoterAuthForm';
 import ElectionCard from '../components/ElectionCard';
 import OrganizationCard from '../components/OrganizationCard';
+import { webSocketService } from '../services/websocket';
+import ConnectionStatusIndicator from '../components/ConnectionStatusIndicator';
 
-let VoterExperience = () => {
-    let { organizations, elections, candidates } = useApp();
-    let [searchTerm, setSearchTerm] = useState('');
-    let [selectedElection, setSelectedElection] = useState(null);
-    let [showVoterAuth, setShowVoterAuth] = useState(false);
+const VoterExperience = () => {
+    const { organizations, elections, candidates, updateElection } = useApp();
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedElection, setSelectedElection] = useState(null);
+    const [showVoterAuth, setShowVoterAuth] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState(false);
+    const [error, setError] = useState(null);
 
-    let filteredElections = elections.filter((election) => {
-        let org = organizations.find((o) => o.id === election.organizationId);
+    // Filter elections based on search term
+    const filteredElections = elections.filter((election) => {
+        const org = organizations.find((o) => o.id === election.organizationId);
         return (
             election.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             election.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -21,11 +26,54 @@ let VoterExperience = () => {
         );
     });
 
-    let activeElections = filteredElections.filter((e) => e.status === 'active');
-    let upcomingElections = filteredElections.filter((e) => e.status === 'upcoming');
-    let completedElections = filteredElections.filter((e) => e.status === 'completed');
+    // Handle WebSocket connections for active elections
+    useEffect(() => {
+        const handleVoteUpdate = (data) => {
+            try {
+                updateElection(data.electionId, {
+                    totalVotes: data.totalVotes,
+                    updatedAt: new Date().toISOString()
+                });
+            } catch (err) {
+                console.error('Error updating election:', err);
+                setError('Failed to update election results. Please refresh the page.');
+            }
+        };
 
-    let handleVoteClick = (election) => {
+        // Subscribe to connection status changes
+        webSocketService.addConnectionStatusListener(setConnectionStatus);
+
+        // Connect to active elections
+        const activeElectionIds = elections
+            .filter(e => e.status === 'active')
+            .map(e => e.id);
+
+        activeElectionIds.forEach(id => {
+            try {
+                webSocketService.connect(id);
+                webSocketService.registerCallback('VOTE_UPDATE', handleVoteUpdate);
+            } catch (err) {
+                console.error('Error connecting to WebSocket:', err);
+                setError('Connection issues - live updates may be delayed');
+            }
+        });
+
+        return () => {
+            webSocketService.removeConnectionStatusListener(setConnectionStatus);
+            webSocketService.disconnect();
+        };
+    }, [elections, updateElection]);
+
+    // Categorize elections
+    const activeElections = filteredElections.filter((e) => e.status === 'active');
+    const upcomingElections = filteredElections.filter((e) => e.status === 'upcoming');
+    const completedElections = filteredElections.filter((e) => e.status === 'completed');
+
+    const handleVoteClick = (election) => {
+        if (!connectionStatus && election.status === 'active') {
+            setError('Please check your internet connection. Voting requires an active connection.');
+            return;
+        }
         setSelectedElection(election);
         setShowVoterAuth(true);
     };
@@ -33,6 +81,17 @@ let VoterExperience = () => {
     return (
         <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-7xl mx-auto">
+                {/* Connection status and error display */}
+                <ConnectionStatusIndicator isConnected={connectionStatus} />
+                {error && (
+                    <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4">
+                        <div className="flex items-center">
+                            <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                            <p className="text-red-700">{error}</p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Header */}
                 <div className="text-center mb-12">
                     <h1 className="text-4xl font-bold text-gray-900 mb-4">Find & Vote in Elections</h1>
@@ -49,16 +108,20 @@ let VoterExperience = () => {
                             type="text"
                             placeholder="Search elections or organizations..."
                             value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setError(null);
+                            }}
                             className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
                         />
                     </div>
                 </div>
 
+                {/* Active Elections */}
                 {activeElections.length > 0 && (
                     <section className="mb-12">
                         <div className="flex items-center space-x-3 mb-6">
-                            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
                             <h2 className="text-2xl font-bold text-gray-900">Active Elections</h2>
                             <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full">
                                 Vote Now
@@ -70,12 +133,14 @@ let VoterExperience = () => {
                                     key={election.id}
                                     election={election}
                                     onVote={() => handleVoteClick(election)}
+                                    isConnected={connectionStatus}
                                 />
                             ))}
                         </div>
                     </section>
                 )}
 
+                {/* Upcoming Elections */}
                 {upcomingElections.length > 0 && (
                     <section className="mb-12">
                         <div className="flex items-center space-x-3 mb-6">
@@ -90,6 +155,7 @@ let VoterExperience = () => {
                     </section>
                 )}
 
+                {/* Completed Elections */}
                 {completedElections.length > 0 && (
                     <section className="mb-12">
                         <div className="flex items-center space-x-3 mb-6">
@@ -103,6 +169,7 @@ let VoterExperience = () => {
                                     <Link
                                         to={`/results/${election.id}`}
                                         className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-md hover:bg-white transition-all duration-200"
+                                        aria-label={`View results for ${election.title}`}
                                     >
                                         <ExternalLink className="h-4 w-4 text-gray-600" />
                                     </Link>
@@ -112,6 +179,7 @@ let VoterExperience = () => {
                     </section>
                 )}
 
+                {/* Organizations */}
                 <section className="mb-12">
                     <div className="flex items-center space-x-3 mb-6">
                         <Users className="h-6 w-6 text-purple-500" />
@@ -124,6 +192,7 @@ let VoterExperience = () => {
                     </div>
                 </section>
 
+                {/* No Results */}
                 {filteredElections.length === 0 && searchTerm && (
                     <div className="text-center py-12">
                         <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
@@ -134,13 +203,16 @@ let VoterExperience = () => {
                     </div>
                 )}
 
+                {/* Voter Auth Modal */}
                 {showVoterAuth && selectedElection && (
                     <VoterAuthForm
                         election={selectedElection}
                         onClose={() => {
                             setShowVoterAuth(false);
                             setSelectedElection(null);
+                            setError(null);
                         }}
+                        onError={(message) => setError(message)}
                     />
                 )}
             </div>
