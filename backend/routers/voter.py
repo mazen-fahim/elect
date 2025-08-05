@@ -62,6 +62,3 @@ async def update_voter(voter_id: str, election_id: int, voter_data: VoterUpdate,
     await db.refresh(voter)
     voter.election_title = voter.election.title
     return voter
-
-
-

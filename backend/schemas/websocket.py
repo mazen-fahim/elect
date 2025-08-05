@@ -57,4 +57,3 @@ class AuditLogData(BaseModel):
     ip_address: str | None
     user_agent: str | None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-
