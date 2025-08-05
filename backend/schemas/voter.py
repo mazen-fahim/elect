@@ -27,3 +27,4 @@ class VoterOut(VoterBase):
 
     class Config:
         orm_mode = True
+        
