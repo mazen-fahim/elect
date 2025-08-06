@@ -1,60 +1,130 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Shield, Check, AlertCircle } from 'lucide-react';
+import { X, Shield, Check, AlertCircle, Loader2 } from 'lucide-react';
 import CandidateCard from './CandidateCard';
+import { webSocketService } from '../services/websocket';
 
-let VoterAuthForm = ({ election, onClose }) => {
-    let { organizations, candidates, castVote } = useApp();
-    let [step, setStep] = useState(1);
-    let [voterId, setVoterId] = useState('');
-    let [verificationCode, setVerificationCode] = useState('');
-    let [selectedCandidate, setSelectedCandidate] = useState(null);
-    let [isVerifying, setIsVerifying] = useState(false);
-    let [error, setError] = useState('');
-    let [voteResult, setVoteResult] = useState(null);
+const VoterAuthForm = ({ election, onClose, onError }) => {
+    const { organizations, candidates } = useApp();
+    const [step, setStep] = useState(1);
+    const [voterId, setVoterId] = useState('');
+    const [verificationCode, setVerificationCode] = useState('');
+    const [selectedCandidate, setSelectedCandidate] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [voteResult, setVoteResult] = useState(null);
+    const [connectionStatus, setConnectionStatus] = useState(false);
 
-    let organization = organizations.find((org) => org.id === election.organizationId);
-    let electionCandidates = candidates.filter((c) => election.candidates.includes(c.id));
+    const organization = organizations.find((org) => org.id === election.organizationId);
+    const electionCandidates = candidates.filter((c) => election.candidates.includes(c.id));
 
-    let handleIdSubmit = async (e) => {
+    // Handle connection status changes
+    useEffect(() => {
+        webSocketService.addConnectionStatusListener(setConnectionStatus);
+        return () => {
+            webSocketService.removeConnectionStatusListener(setConnectionStatus);
+        };
+    }, []);
+
+    // Handle OTP verification response
+    useEffect(() => {
+        const handleOtpVerified = (data) => {
+            setIsLoading(false);
+            if (data.success) {
+                setStep(3);
+                setError('');
+            } else {
+                setError(data.message || 'Invalid verification code. Please try again.');
+            }
+        };
+
+        webSocketService.registerCallback('OTP_VERIFIED', handleOtpVerified);
+
+        return () => {
+            webSocketService.unregisterCallback('OTP_VERIFIED');
+        };
+    }, []);
+
+    const handleIdSubmit = async (e) => {
         e.preventDefault();
-        setIsVerifying(true);
+        setIsLoading(true);
         setError('');
 
-        setTimeout(() => {
+        try {
+            // In a real app, this would call your backend API
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
             if (voterId.length >= 10) {
                 setStep(2);
-
-                alert(`Verification code sent to voter ID: ${voterId}`);
+                // Simulate sending verification code
+                console.log(`Verification code sent to voter ID: ${voterId}`);
             } else {
-                setError('Invalid National ID. Please check and try again.');
+                throw new Error('Invalid National ID. Must be at least 10 characters.');
             }
-            setIsVerifying(false);
-        }, 2000);
-    };
-
-    let handleCodeSubmit = (e) => {
-        e.preventDefault();
-        if (verificationCode === '123456') {
-            setStep(3);
-            setError('');
-        } else {
-            setError('Invalid verification code. Please try again.');
+        } catch (err) {
+            setError(err.message);
+            if (onError) onError(err.message);
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    let handleVoteSubmit = () => {
+    const handleCodeSubmit = async (e) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError('');
+
+        try {
+            if (!connectionStatus) {
+                throw new Error('No internet connection. Please check your network and try again.');
+            }
+
+            webSocketService.sendMessage('VERIFY_OTP', {
+                electionId: election.id,
+                voterId,
+                otp: verificationCode
+            });
+        } catch (err) {
+            setError(err.message);
+            setIsLoading(false);
+            if (onError) onError(err.message);
+        }
+    };
+
+    const handleVoteSubmit = async () => {
         if (!selectedCandidate) {
             setError('Please select a candidate to vote for.');
             return;
         }
 
-        let result = castVote(election.id, selectedCandidate.id, voterId);
-        setVoteResult(result);
-        setStep(4);
+        setIsLoading(true);
+        setError('');
+
+        try {
+            if (!connectionStatus) {
+                throw new Error('No internet connection. Voting requires an active connection.');
+            }
+
+            webSocketService.sendMessage('SUBMIT_VOTE', {
+                electionId: election.id,
+                candidateId: selectedCandidate.id,
+                voterId: voterId
+            });
+
+            setVoteResult({ success: true });
+            setStep(4);
+        } catch (err) {
+            setVoteResult({
+                success: false,
+                message: err.message || 'Failed to submit vote. Please try again.'
+            });
+            if (onError) onError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    let renderIdEntry = () => (
+    const renderIdEntry = () => (
         <div>
             <div className="text-center mb-6">
                 <Shield className="h-12 w-12 text-blue-500 mx-auto mb-4" />
@@ -64,7 +134,9 @@ let VoterAuthForm = ({ election, onClose }) => {
 
             <form onSubmit={handleIdSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">National ID Number</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        National ID Number
+                    </label>
                     <input
                         type="text"
                         value={voterId}
@@ -72,6 +144,9 @@ let VoterAuthForm = ({ election, onClose }) => {
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Enter your National ID"
                         required
+                        minLength="10"
+                        pattern="[0-9]*"
+                        inputMode="numeric"
                     />
                 </div>
 
@@ -84,34 +159,47 @@ let VoterAuthForm = ({ election, onClose }) => {
 
                 <button
                     type="submit"
-                    disabled={isVerifying}
-                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+                    disabled={isLoading}
+                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 flex justify-center items-center"
                 >
-                    {isVerifying ? 'Verifying...' : 'Verify ID'}
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Verifying...
+                        </>
+                    ) : (
+                        'Verify ID'
+                    )}
                 </button>
             </form>
         </div>
     );
 
-    let renderCodeEntry = () => (
+    const renderCodeEntry = () => (
         <div>
             <div className="text-center mb-6">
                 <Shield className="h-12 w-12 text-green-500 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Enter Verification Code</h3>
-                <p className="text-gray-600">We've sent a verification code to your registered contact method</p>
+                <p className="text-gray-600">
+                    We've sent a 6-digit verification code to your registered contact method
+                </p>
             </div>
 
             <form onSubmit={handleCodeSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Verification Code</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Verification Code
+                    </label>
                     <input
                         type="text"
                         value={verificationCode}
-                        onChange={(e) => setVerificationCode(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-lg tracking-widest"
-                        placeholder="123456"
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-center text-lg tracking-widest font-mono"
+                        placeholder="------"
                         maxLength="6"
                         required
+                        pattern="\d{6}"
+                        inputMode="numeric"
                     />
                 </div>
 
@@ -124,14 +212,25 @@ let VoterAuthForm = ({ election, onClose }) => {
 
                 <button
                     type="submit"
-                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors duration-200"
+                    disabled={isLoading}
+                    className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors duration-200 disabled:opacity-50 flex justify-center items-center"
                 >
-                    Verify Code
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Verifying...
+                        </>
+                    ) : (
+                        'Verify Code'
+                    )}
                 </button>
 
                 <button
                     type="button"
-                    onClick={() => setStep(1)}
+                    onClick={() => {
+                        setStep(1);
+                        setError('');
+                    }}
                     className="w-full px-4 py-3 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200"
                 >
                     Back to ID Entry
@@ -144,7 +243,7 @@ let VoterAuthForm = ({ election, onClose }) => {
         </div>
     );
 
-    let renderVoting = () => (
+    const renderVoting = () => (
         <div>
             <div className="text-center mb-6">
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Cast Your Vote</h3>
@@ -155,12 +254,16 @@ let VoterAuthForm = ({ election, onClose }) => {
                 {electionCandidates.map((candidate) => (
                     <div
                         key={candidate.id}
-                        onClick={() => setSelectedCandidate(candidate)}
-                        className={`cursor-pointer transition-all duration-200 ${
-                            selectedCandidate?.id === candidate.id
+                        onClick={() => {
+                            setSelectedCandidate(candidate);
+                            setError('');
+                        }}
+                        className={`cursor-pointer transition-all duration-200 ${selectedCandidate?.id === candidate.id
                                 ? 'ring-2 ring-blue-500 bg-blue-50'
                                 : 'hover:bg-gray-50'
-                        }`}
+                            }`}
+                        aria-selected={selectedCandidate?.id === candidate.id}
+                        role="option"
                     >
                         <CandidateCard candidate={candidate} />
                     </div>
@@ -177,11 +280,20 @@ let VoterAuthForm = ({ election, onClose }) => {
             <div className="flex space-x-4">
                 <button
                     onClick={handleVoteSubmit}
-                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors duration-200"
+                    disabled={isLoading || !selectedCandidate}
+                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors duration-200 disabled:opacity-50 flex justify-center items-center"
                 >
-                    Cast Vote
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processing...
+                        </>
+                    ) : (
+                        'Cast Vote'
+                    )}
                 </button>
                 <button
+                    type="button"
                     onClick={() => setStep(2)}
                     className="px-4 py-3 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200"
                 >
@@ -191,7 +303,7 @@ let VoterAuthForm = ({ election, onClose }) => {
         </div>
     );
 
-    let renderConfirmation = () => (
+    const renderConfirmation = () => (
         <div className="text-center">
             {voteResult?.success ? (
                 <>
@@ -227,8 +339,8 @@ let VoterAuthForm = ({ election, onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
                     <div>
                         <h2 className="text-xl font-semibold text-gray-900">{election.title}</h2>
                         <p className="text-sm text-gray-600">{organization?.name}</p>
@@ -236,6 +348,7 @@ let VoterAuthForm = ({ election, onClose }) => {
                     <button
                         onClick={onClose}
                         className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+                        aria-label="Close voting form"
                     >
                         <X className="h-5 w-5 text-gray-500" />
                     </button>
