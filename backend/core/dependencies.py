@@ -53,7 +53,7 @@ admin_dependency = Annotated[User, Depends(get_admin)]
 
 
 def get_organiztion(user: user_dependency):
-    if user.role not in [UserRole.organization, UserRole.organization_admin]:
+    if user.role not in [UserRole.organization]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
     return user
 
