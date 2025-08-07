@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from database import db_dependency
+from core.dependencies import db_dependency
 from models import Candidate
 from schemas.candidate import CandidateRead
 

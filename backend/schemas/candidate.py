@@ -41,5 +41,5 @@ class CandidateRead(CandidateBase):
     organization_admin: Optional["OrganizationAdmin"] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         use_enum_values = True
