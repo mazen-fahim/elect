@@ -5,11 +5,12 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from . import Base
+from core.base import Base
 
 if TYPE_CHECKING:
     from .organization import Organization
     from .organization_admin import OrganizationAdmin
+    from .verification_token import VerificationToken
 
 
 class UserRole(enum.Enum):
@@ -34,3 +35,5 @@ class User(Base):
     organization_admin: Mapped["OrganizationAdmin"] = relationship(
         "OrganizationAdmin", back_populates="user", uselist=False
     )
+
+    verification_tokens: Mapped["VerificationToken"] = relationship("VerificationToken", back_populates="user")

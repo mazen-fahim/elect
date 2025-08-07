@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.future import select
 
-from database import db_dependency
+from core.dependencies import db_dependency
 from models.voter import Voter
 from schemas.voter import VoterCreate, VoterOut, VoterUpdate
 

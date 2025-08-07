@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.future import select
 
-from database import db_dependency
+from core.dependencies import db_dependency
 from models.voting_process import VotingProcess
 from schemas.voting_process import VotingProcessCreate, VotingProcessOut
 
@@ -52,4 +52,3 @@ async def get_voting_process(voter_id: str, election_id: int, db: db_dependency)
         election_status=process.election.status,
         created_at=process.created_at,
     )
-
