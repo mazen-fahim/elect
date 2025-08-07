@@ -1,14 +1,24 @@
 from datetime import timedelta
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import RedirectResponse
+from fastapi_limiter.depends import RateLimiter
 from starlette import status
 
-from core.dependencies import db_dependency
+from core.dependencies import client_ip_dependency, db_dependency
 from core.settings import settings
-from schemas.auth import LoginRequest, LoginResponse, RegisterOrganizationRequest, RegisterOrganizationResponse
+from schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    RegisterOrganizationRequest,
+    RegisterOrganizationResponse,
+    SuccessMessage,
+)
 from services.auth import AuthService
 from services.email import EmailService
+from services.reset_password import PasswordResetService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -57,3 +67,36 @@ async def verify_email(token: str, db: db_dependency):
     email_service = EmailService(db)
     _ = await email_service.verify_email_token(token)
     return RedirectResponse(url="/email-verified-successfully")
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_200_OK,
+    response_model=SuccessMessage,
+    dependencies=[Depends(RateLimiter(times=3, minutes=15))],
+)
+async def forgot_password(
+    request: PasswordResetRequest,
+    db: db_dependency,
+    client_ip: client_ip_dependency,
+):
+    password_reset_service = PasswordResetService(db)
+    await password_reset_service.request_password_reset(request.email)
+    return SuccessMessage(
+        success=True, status_code=status.HTTP_200_OK, message="Password reset email sent successfully"
+    )
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_200_OK,
+    response_model=SuccessMessage,
+)
+async def reset_password(
+    form_data: PasswordResetConfirm,
+    db: db_dependency,
+):
+    """Complete password reset with token"""
+    service = PasswordResetService(db)
+    await service.reset_password(form_data.token, form_data.new_password)
+    return SuccessMessage(success=True, status_code=status.HTTP_200_OK, message="Password reset successfully")

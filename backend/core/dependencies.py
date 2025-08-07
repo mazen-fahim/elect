@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from core.settings import settings
@@ -60,3 +60,13 @@ def get_organiztion(user: user_dependency):
 
 # Protect API endpoints with organization privileges
 organization_dependency = Annotated[User, Depends(get_organiztion)]
+
+
+def get_client_ip(request: Request):
+    """3 tries every 15 minutes"""
+    forwarded = request.headers.get("X-Forwarded-For")
+    ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
+    return ip
+
+
+client_ip_dependency = Annotated[str | None, Depends(get_client_ip)]

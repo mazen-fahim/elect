@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from core.settings import settings
-from models import EmailVerificationToken, User
+from models import User, VerificationToken
+from models.verification_token import TokenType
 
 
 @final
@@ -28,13 +29,23 @@ class EmailService:
         if background_tasks:
             background_tasks.add_task(self._send_email, user.email, verification_link, token.expires_at)
 
-    async def _generate_verification_token(self, user_id: int) -> EmailVerificationToken:
+    async def send_password_reset_email(self, email: str, reset_url: str, expires_at: datetime):
+        await self._send_email(email, reset_url, expires_at)
+
+    async def _generate_verification_token(self, user_id: int) -> VerificationToken:
         """Generate and store a new verification token"""
 
-        _ = await self.db.execute(delete(EmailVerificationToken).where(EmailVerificationToken.user_id == user_id))
+        _ = await self.db.execute(
+            delete(VerificationToken).where(
+                VerificationToken.user_id == user_id and VerificationToken.type == TokenType.EMAIL_VERIFICATION
+            )
+        )
 
-        token = EmailVerificationToken(
-            token=str(uuid.uuid4()), user_id=user_id, expires_at=datetime.now() + timedelta(hours=24)
+        token = VerificationToken(
+            token=str(uuid.uuid4()),
+            user_id=user_id,
+            expires_at=datetime.now() + timedelta(hours=24),
+            type=TokenType.EMAIL_VERIFICATION,
         )
 
         self.db.add(token)
@@ -43,7 +54,11 @@ class EmailService:
 
     async def verify_email_token(self, token: str) -> User:
         """Verify the email token and activate the user"""
-        result = await self.db.execute(select(EmailVerificationToken).where(EmailVerificationToken.token == token))
+        result = await self.db.execute(
+            select(VerificationToken).where(
+                VerificationToken.token == token and VerificationToken.type == TokenType.EMAIL_VERIFICATION
+            )
+        )
         verification = result.scalars().first()
 
         if not verification:

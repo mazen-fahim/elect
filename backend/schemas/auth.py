@@ -43,3 +43,25 @@ class RegisterOrganizationResponse(BaseModel):
     class Config:
         orm_mode: bool = True
         allow_population_by_field_name: bool = True
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+    confirm_password: str
+
+    @field_validator("confirm_password")
+    def passwords_match(cls, v, values, **kwargs):
+        if "new_password" in values and v != values["new_password"]:
+            raise ValueError("Passwords do not match")
+        return v
+
+
+class SuccessMessage(BaseModel):
+    success: bool
+    status_code: int
+    message: str
