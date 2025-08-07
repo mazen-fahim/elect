@@ -33,7 +33,6 @@ async def create_election(election_data: ElectionCreate, db: db_dependency):
         title=election_data.title,
         types=election_data.types,
         organization_id=election_data.organization_id,
-        organization_admin_id=election_data.organization_admin_id,
         starts_at=election_data.starts_at,
         ends_at=election_data.ends_at,
         num_of_votes_per_voter=election_data.num_of_votes_per_voter,

@@ -1,9 +1,16 @@
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.base import Base
+
+if TYPE_CHECKING:
+    from .candidate_participation import CandidateParticipation
+    from .organization import Organization
+    from .voter import Voter
+    from .voting_process import VotingProcess
 
 
 class Election(Base):
@@ -23,12 +30,8 @@ class Election(Base):
     potential_number_of_voters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     organization_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.user_id", ondelete="CASCADE"))
-    organization_admin_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("organization_admins.user_id", ondelete="CASCADE")
-    )
 
-    organization = relationship("Organization", back_populates="elections")
-    organization_admin = relationship("OrganizationAdmin", back_populates="elections")
-    voting_processes = relationship("VotingProcess", back_populates="election")
-    voters = relationship("Voter", back_populates="election")
-    participations = relationship("CandidateParticipation", back_populates="election")
+    organization: Mapped["Organization"] = relationship("Organization", back_populates="elections")
+    voting_processes: Mapped["VotingProcess"] = relationship("VotingProcess", back_populates="election")
+    voters: Mapped["Voter"] = relationship("Voter", back_populates="election")
+    participations: Mapped["CandidateParticipation"] = relationship("CandidateParticipation", back_populates="election")

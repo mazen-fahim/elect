@@ -51,7 +51,6 @@ async def get_candidate_by_id(hashed_national_id: str, db: db_dependency):
         .options(
             selectinload(Candidate.participations),
             selectinload(Candidate.organization),
-            selectinload(Candidate.organization_admin),
         )
     )
 

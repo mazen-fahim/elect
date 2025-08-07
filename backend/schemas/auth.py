@@ -1,4 +1,8 @@
+import enum
+
 from pydantic import BaseModel, EmailStr, HttpUrl, field_validator
+
+from core.shared import Country
 
 
 # Login
@@ -17,9 +21,8 @@ class RegisterOrganizationRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    phone: str
-    address: str
-    country: str
+    country: Country
+    address: str | None = None
     description: str | None = None
     api_endpoint: HttpUrl | None = None
 
@@ -29,20 +32,26 @@ class RegisterOrganizationRequest(BaseModel):
             return None
         return v
 
+    class config:
+        use_enum_values: bool = True
 
-class RegisterOrganizationResponse(BaseModel):
-    id: int
-    name: str
-    email: EmailStr
-    phone: str
-    address: str
-    country: str
-    description: str | None = None
-    api_endpoint: HttpUrl | None = None
+
+class FieldNames(enum.Enum):
+    org_name = "name"
+    email = "email"
+    api_endpoint = "api_endpoint"
+
+
+class RegisterOrganizationErrorResponse(BaseModel):
+    field: FieldNames
+    error_message: str
 
     class Config:
-        from_attributes: bool = True
-        validate_by_name: bool = True
+        use_enum_values: bool = True
+
+
+class LoginErrorResponse(BaseModel):
+    error_message: str
 
 
 class PasswordResetRequest(BaseModel):
@@ -50,7 +59,6 @@ class PasswordResetRequest(BaseModel):
 
 
 class PasswordResetConfirm(BaseModel):
-    token: str
     new_password: str
     confirm_password: str
 
