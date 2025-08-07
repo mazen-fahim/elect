@@ -41,8 +41,8 @@ class RegisterOrganizationResponse(BaseModel):
     api_endpoint: HttpUrl | None = None
 
     class Config:
-        orm_mode: bool = True
-        allow_population_by_field_name: bool = True
+        from_attributes: bool = True
+        validate_by_name: bool = True
 
 
 class PasswordResetRequest(BaseModel):

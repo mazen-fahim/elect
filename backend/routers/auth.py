@@ -20,13 +20,19 @@ from services.auth import AuthService
 from services.email import EmailService
 from services.reset_password import PasswordResetService
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post(
     "/login",
     status_code=status.HTTP_200_OK,
     response_model=LoginResponse,
+    responses={
+        403: {
+            "description": "User is inactive",
+            "content": {"application/json": {"example": {"detail": "User is inactive"}}},
+        }
+    },
 )
 async def login(login_request: LoginRequest, db: db_dependency):
     auth_service = AuthService(db)
