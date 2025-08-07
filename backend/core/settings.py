@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str
     EMAIL_FROM: str = "elect@gmail.com"
     VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
-    FRONTEND_VERIFICATION_URL: str = "https://yourfrontend.com/verify-email"
+    FRONTEND_VERIFICATION_URL: str = "https://localhost/verify-email"
 
     # File upload limits
     MAX_DOCUMENT_SIZE: int = 5 * 1024 * 1024
