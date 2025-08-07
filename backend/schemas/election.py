@@ -7,7 +7,6 @@ class ElectionBase(BaseModel):
     title: str
     types: str
     organization_id: str
-    organization_admin_id: str
     starts_at: datetime
     ends_at: datetime
     num_of_votes_per_voter: int
