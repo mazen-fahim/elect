@@ -1,8 +1,9 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, EmailStr, constr, HttpUrl, validator, Field
+
 from fastapi import UploadFile
+from pydantic import BaseModel, EmailStr, Field, HttpUrl, constr, validator
+
 from ..config import settings
 
 
@@ -20,16 +21,10 @@ class OrganizationCreate(BaseModel):
     phone: constr(min_length=10, max_length=15) = Field(..., example="+1234567890")
     address: str = Field(..., example="123 Eco Street, Green City")
     org_type: str = Field(..., example="Non-Profit", description="Organization type as free text")
-    description: Optional[str] = Field(None, example="Environmental conservation organization")
-    website: Optional[HttpUrl] = Field(None, example="https://greenearth.org")
+    description: str | None = Field(None, example="Environmental conservation organization")
+    website: HttpUrl | None = Field(None, example="https://greenearth.org")
     contact_person: str = Field(..., example="John Doe")
     password: constr(min_length=8) = Field(..., example="SecurePass123")
-
-    @validator("website", pre=True)
-    def validate_website(cls, v):
-        if v == "":
-            return None
-        return v
 
 
 class OrganizationVerifiedResponse(BaseModel):
@@ -38,8 +33,8 @@ class OrganizationVerifiedResponse(BaseModel):
     email: str = Field(..., example="contact@greenearth.org")
     status: OrganizationStatus = Field(..., example=OrganizationStatus.PENDING)
     created_at: datetime = Field(..., example="2023-01-01T00:00:00")
-    approved_at: Optional[datetime] = Field(None, example="2023-01-02T00:00:00")
-    website: Optional[HttpUrl] = Field(None, example="https://greenearth.org")
+    approved_at: datetime | None = Field(None, example="2023-01-02T00:00:00")
+    website: HttpUrl | None = Field(None, example="https://greenearth.org")
     email_verified: bool = Field(..., description="Whether email has been verified")
     is_active: bool = Field(..., description="Whether account is active")
 
@@ -56,7 +51,7 @@ class VerificationResponse(BaseModel):
 class TokenVerificationResponse(BaseModel):
     success: bool = Field(..., description="Verification status")
     message: str = Field(..., example="Email verified successfully")
-    access_token: Optional[str] = Field(None, description="JWT token if verification succeeds")
+    access_token: str | None = Field(None, description="JWT token if verification succeeds")
 
 
 class PaymentInfo(BaseModel):

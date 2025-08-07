@@ -1,4 +1,6 @@
-from database import Base
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()  # pyright: ignore[reportAny]
 
 from .candidate import Candidate
 from .candidate_participation import CandidateParticipation
