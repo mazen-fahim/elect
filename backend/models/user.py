@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from . import Base
 
 if TYPE_CHECKING:
+    from .email_verification_token import EmailVerificationToken
     from .organization import Organization
     from .organization_admin import OrganizationAdmin
 
@@ -33,4 +34,8 @@ class User(Base):
 
     organization_admin: Mapped["OrganizationAdmin"] = relationship(
         "OrganizationAdmin", back_populates="user", uselist=False
+    )
+
+    email_verification_token: Mapped["EmailVerificationToken"] = relationship(
+        "EmailVerificationToken", back_populates="user", userelist=False
     )

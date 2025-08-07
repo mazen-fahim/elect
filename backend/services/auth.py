@@ -10,8 +10,7 @@ from sqlalchemy.future import select
 from core.settings import settings
 from models import Organization, User
 from models.user import UserRole
-from schemas.auth import LoginRequest
-from schemas.register import OrganizationCreate
+from schemas.auth import LoginRequest, RegisterOrganizationRequest
 
 
 @final
@@ -52,7 +51,7 @@ class AuthService:
         except JWTError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from JWTError
 
-    async def register_organization(self, org_data: OrganizationCreate) -> Organization:
+    async def register_organization(self, org_data: RegisterOrganizationRequest) -> Organization:
         # Check if email already exists
         result = await self.db.execute(select(User).where(User.email == org_data.email))
         if result.scalars().first():
@@ -63,10 +62,11 @@ class AuthService:
             email=org_data.email,
             password=AuthService.get_password_hash(org_data.password),
             role="organization",
-            is_active=True,
+            is_active=False,  # Initially inactive, needs verification
             created_at=datetime.now(UTC),
             last_access_at=datetime.now(UTC),
         )
+
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
@@ -74,17 +74,14 @@ class AuthService:
         # Create organization
         org = Organization(
             name=org_data.name,
-            email=org_data.email,
-            phone=org_data.phone,
-            address=org_data.address,
-            org_type=org_data.org_type.value,
-            description=org_data.description,
-            website=org_data.website,
-            contact_person=org_data.contact_person,
             status="pending",
+            api_endpoint=org_data.api_endpoint,
+            country=org_data.country,
+            address=org_data.address,
+            description=org_data.description,
             user_id=user.id,
-            created_at=datetime.now(UTC),
         )
+
         self.db.add(org)
         await self.db.commit()
         await self.db.refresh(org)
