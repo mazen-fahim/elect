@@ -1,62 +1,12 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from models import Organization, User
-from schemas.register import OrganizationCreate, OrganizationResponse, PaymentInfo
-from services import AuthService, EmailService, RegistrationService
+from schemas.register import OrganizationResponse, PaymentInfo
+from services import RegistrationService
 
 router = APIRouter(tags=["registration"])
-
-
-@router.post("/register", response_model=OrganizationResponse)
-async def register_organization(
-    background_tasks: BackgroundTasks,
-    name: str = Form(...),
-    email: str = Form(...),
-    phone: str = Form(...),
-    address: str = Form(...),
-    org_type: str = Form(...),
-    description: str | None = Form(None),
-    website: str | None = Form(None),
-    contact_person: str = Form(...),
-    password: str = Form(...),
-    db: Session = Depends(get_db),
-):
-    """Register a new organization with form data and send verification email"""
-    org_data = OrganizationCreate(
-        name=name,
-        email=email,
-        phone=phone,
-        address=address,
-        org_type=org_type,
-        description=description,
-        website=website,
-        contact_person=contact_person,
-        password=password,
-    )
-
-    service = AuthService(db)
-    org = service.register_organization(org_data)
-
-    # Send verification email
-    user = db.query(User).filter(User.email == email).first()
-    if user:
-        email_service = EmailService(db)
-        email_service.send_verification_email(user, background_tasks)
-
-    return org
-
-
-@router.get("/verify-email")
-async def verify_email(token: str, db: Session = Depends(get_db)):
-    """Verify email address using token"""
-    email_service = EmailService(db)
-    try:
-        user = email_service.verify_email_token(token)
-        return RedirectResponse(url="/email-verified-successfully")
-    except HTTPException as e:
-        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
 @router.post("/register/{org_id}/documents")
@@ -156,12 +106,3 @@ async def download_template():
 
     template_path = os.path.join(os.path.dirname(__file__), "../templates/org_template.csv")
     return FileResponse(template_path, filename="organization_template.csv", media_type="text/csv")
-
-
-@router.get("/verify-email")
-async def verify_email(token: str, db: Session = Depends(get_db)):
-    """Verify email using the provided token"""
-    email_service = EmailService(db)
-    user = email_service.verify_email_token(token)
-
-    return {"message": "Email verified successfully", "user_id": user.id, "email": user.email}
