@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy.future import select
 
-from database import db_dependency
+from core.dependencies import db_dependency
 from models.election import Election
 from schemas.election import ElectionCreate, ElectionOut, ElectionUpdate
 
@@ -83,4 +83,3 @@ async def delete_election(election_id: int, db: db_dependency):
 
     await db.delete(election)
     await db.commit()
-

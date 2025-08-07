@@ -4,9 +4,8 @@ from typing import TYPE_CHECKING
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from core.base import Base
 from core.shared import Country, Status
-
-from . import Base
 
 if TYPE_CHECKING:
     from .candidate_participation import CandidateParticipation

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from . import Base
+from core.base import Base
 
 if TYPE_CHECKING:
     from .organization import Organization

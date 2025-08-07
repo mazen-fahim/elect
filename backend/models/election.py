@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from . import Base
+from core.base import Base
 
 
 class Election(Base):
@@ -17,7 +17,7 @@ class Election(Base):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
-    total_vote_count: Mapped[int] = mapped_column(Integer,nullable=False, default=0)
+    total_vote_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     number_of_candidates: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     num_of_votes_per_voter: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     potential_number_of_voters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
