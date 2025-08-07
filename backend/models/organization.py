@@ -9,7 +9,6 @@ from core.shared import Country, Status
 if TYPE_CHECKING:
     from .candidate import Candidate
     from .election import Election
-    from .organization_admin import OrganizationAdmin
     from .user import User
 
 
@@ -24,7 +23,7 @@ class Organization(Base):
 
     country: Mapped[Country] = mapped_column(Enum(Country), nullable=False)
 
-    address: Mapped[str] = mapped_column(String(500), nullable=False)
+    address: Mapped[str] = mapped_column(String(500), nullable=True)
 
     description: Mapped[str] = mapped_column(String(1000), nullable=True)
 
@@ -33,8 +32,6 @@ class Organization(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="organization")
-
-    admins: Mapped["OrganizationAdmin"] = relationship("OrganizationAdmin", back_populates="organization")
 
     candidates: Mapped["Candidate"] = relationship("Candidate", back_populates="organization")
 

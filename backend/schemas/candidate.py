@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, HttpUrl
 
@@ -8,7 +8,6 @@ from models.candidate_participation import CandidateParticipation
 
 if TYPE_CHECKING:
     from models.organization import Organization
-    from models.organization_admin import OrganizationAdmin
 
 
 class CandidateBase(BaseModel):
@@ -24,7 +23,6 @@ class CandidateBase(BaseModel):
     photo_url: HttpUrl | None = None
     birth_date: datetime
     description: str | None = None
-    organization_admin_id: int | None = None
 
 
 class CandidateCreate(CandidateBase):
@@ -38,7 +36,6 @@ class CandidateRead(CandidateBase):
 
     participations: list[CandidateParticipation] = []
     organization: "Organization"
-    organization_admin: Optional["OrganizationAdmin"] = None
 
     class Config:
         from_attributes = True
