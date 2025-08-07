@@ -8,7 +8,7 @@ from routers import election, organization, voter, voting_process
 app = FastAPI()
 
 
-@app.get("/api/healthy")
+@app.get("/healthy")
 def health_check():
     return {"status": "Healthy"}
 

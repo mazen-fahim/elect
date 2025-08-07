@@ -1,46 +1,62 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
+from typing import Annotated
 
-from ..models import User
-from ..schemas.login import TokenData
-from ..security import decode_token
-from ..database import get_db
-from jose import JWTError
+from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+from core.settings import settings
+from models import User
+from models.user import UserRole
+from services.auth import AuthService
+
+engine = create_async_engine(settings.SQLALCHEMY_DATABASE_URL)
+
+SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = decode_token(token)
-        if payload is None:
-            raise credentials_exception
-        user_id: int = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-        token_data = TokenData(**payload)
-    except JWTError:
-        raise credentials_exception
+async def get_db():
+    async with SessionLocal() as session:
+        yield session
 
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        raise credentials_exception
+
+db_dependency = Annotated[AsyncSession, Depends(get_db)]
+
+
+def get_auth_service(db: db_dependency) -> AuthService:
+    return AuthService(db)
+
+
+auth_service_dependency = Annotated[AuthService, Depends(get_auth_service)]
+
+
+async def get_current_user(auth_service: auth_service_dependency, authorization: str = Header(...)) -> User:  # pyright: ignore[reportCallInDefaultInitializer]
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication scheme")
+    user = await auth_service.verify_jwt_token(token)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     return user
 
 
-def require_admin(user: User = Depends(get_current_user)):
-    if user.role != "admin":
+# Protect API endpoints with any authenticated user
+user_dependency = Annotated[User, Depends(get_current_user)]
+
+
+def get_admin(user: user_dependency):
+    if user.role != UserRole.admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
     return user
 
 
-def require_org_admin(user: User = Depends(get_current_user)):
-    if user.role not in ["admin", "organization_admin"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin privileges required")
+# Protect API endpoints with admin privileges
+admin_dependency = Annotated[User, Depends(get_admin)]
+
+
+def get_organiztion(user: user_dependency):
+    if user.role not in [UserRole.organization, UserRole.organization_admin]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
     return user
+
+
+# Protect API endpoints with organization privileges
+organization_dependency = Annotated[User, Depends(get_organiztion)]

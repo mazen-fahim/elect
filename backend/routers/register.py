@@ -1,13 +1,10 @@
-from datetime import datetime
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
 
-from ..dependencies import get_current_user, get_db, get_registration_service
-from ..models import User, Organization
-from ..schemas.register import OrganizationCreate, OrganizationResponse, PaymentInfo
-from ..services import RegistrationService, AuthService, EmailService
+from models import Organization, User
+from schemas.register import OrganizationCreate, OrganizationResponse, PaymentInfo
+from services import AuthService, EmailService, RegistrationService
 
 router = APIRouter(tags=["registration"])
 
@@ -20,8 +17,8 @@ async def register_organization(
     phone: str = Form(...),
     address: str = Form(...),
     org_type: str = Form(...),
-    description: Optional[str] = Form(None),
-    website: Optional[str] = Form(None),
+    description: str | None = Form(None),
+    website: str | None = Form(None),
     contact_person: str = Form(...),
     password: str = Form(...),
     db: Session = Depends(get_db),
@@ -65,7 +62,7 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
 @router.post("/register/{org_id}/documents")
 async def upload_documents(
     org_id: int,
-    documents: List[UploadFile] = File(..., description="Max 5MB per file"),
+    documents: list[UploadFile] = File(..., description="Max 5MB per file"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -153,8 +150,9 @@ async def validate_spreadsheet(
 @router.get("/download-template")
 async def download_template():
     """Download CSV template for bulk registration"""
-    from fastapi.responses import FileResponse
     import os
+
+    from fastapi.responses import FileResponse
 
     template_path = os.path.join(os.path.dirname(__file__), "../templates/org_template.csv")
     return FileResponse(template_path, filename="organization_template.csv", media_type="text/csv")
