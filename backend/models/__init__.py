@@ -7,6 +7,7 @@ from .email_verification_token import EmailVerificationToken
 from .organization import Organization
 from .organization_admin import OrganizationAdmin
 from .user import User
+from .verification_token import VerificationToken
 from .voter import Voter
 from .voting_process import VotingProcess
 

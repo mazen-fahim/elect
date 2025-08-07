@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+Grom fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -29,28 +29,6 @@ async def upload_documents(
     return service.upload_documents(org_id, documents)
 
 
-@router.post("/register/{org_id}/payment", response_model=OrganizationResponse)
-async def process_payment(
-    org_id: int,
-    card_number: str = Form(...),
-    expiry_date: str = Form(...),
-    cvv: str = Form(...),
-    card_name: str = Form(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Process payment for organization registration"""
-    org = db.query(Organization).filter(Organization.id == org_id, Organization.user_id == current_user.id).first()
-    if not org:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="No permission to process payment for this organization"
-        )
-
-    payment_data = PaymentInfo(card_number=card_number, expiry_date=expiry_date, cvv=cvv, card_name=card_name)
-
-    service = RegistrationService(db)
-    service.process_payment(org_id, payment_data)
-    return db.query(Organization).filter(Organization.id == org_id).first()
 
 
 @router.post("/upload-spreadsheet")

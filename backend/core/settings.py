@@ -24,8 +24,11 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str
     SMTP_PASSWORD: str
     EMAIL_FROM: str = "elect@gmail.com"
-    VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
+    EMAIL_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
     FRONTEND_VERIFICATION_URL: str = "https://localhost/verify-email"
+
+    # Password Reset
+    PASSWORD_VERIFICATION_TOKEN_EXPIRE_HOURS: int = 24
 
     # File upload limits
     MAX_DOCUMENT_SIZE: int = 5 * 1024 * 1024
