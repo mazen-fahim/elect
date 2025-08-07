@@ -8,6 +8,7 @@ import OrganizationDashboard from './pages/OrganizationDashboard';
 import OrganizationLogin from './pages/OrganizationLogin';
 import ElectionResults from './pages/ElectionResults';
 
+
 function App() {
     return (
         <AppProvider>
@@ -19,6 +20,7 @@ function App() {
                     <Route path="/org/:id/dashboard" element={<OrganizationDashboard />} />
                     <Route path="/login/org" element={<OrganizationLogin />} />
                     <Route path="/results/:electionId" element={<ElectionResults />} />
+                    
                 </Routes>
             </div>
         </AppProvider>
