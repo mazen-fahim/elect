@@ -39,28 +39,6 @@ class OrganizationVerifiedResponse(BaseModel):
     is_active: bool = Field(..., description="Whether account is active")
 
 
-class VerificationRequest(BaseModel):
-    email: EmailStr = Field(..., description="Email to resend verification to")
-
-
-class VerificationResponse(BaseModel):
-    message: str = Field(..., example="Verification email sent")
-    expires_at: datetime = Field(..., description="When the verification token expires")
-
-
-class TokenVerificationResponse(BaseModel):
-    success: bool = Field(..., description="Verification status")
-    message: str = Field(..., example="Email verified successfully")
-    access_token: str | None = Field(None, description="JWT token if verification succeeds")
-
-
-class PaymentInfo(BaseModel):
-    card_number: constr(min_length=12, max_length=19) = Field(..., example="4111111111111111")
-    expiry_date: constr(min_length=4, max_length=5) = Field(..., example="12/25", description="MM/YY format")
-    cvv: constr(min_length=3, max_length=4) = Field(..., example="123")
-    card_name: str = Field(..., example="John Doe")
-
-
 class FileType(str, Enum):
     CSV = "text/csv"
     EXCEL = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
