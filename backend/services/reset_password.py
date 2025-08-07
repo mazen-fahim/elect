@@ -16,7 +16,9 @@ class PasswordResetService:
         self.db = db
 
     async def request_password_reset(self, email: str):
-        user = await self.db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        result = await self.db.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+
         if not user:
             return
 
