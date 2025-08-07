@@ -8,12 +8,13 @@ from starlette import status
 from core.dependencies import client_ip_dependency, db_dependency
 from core.settings import settings
 from schemas.auth import (
+    LoginErrorResponse,
     LoginRequest,
     LoginResponse,
     PasswordResetConfirm,
     PasswordResetRequest,
+    RegisterOrganizationErrorResponse,
     RegisterOrganizationRequest,
-    RegisterOrganizationResponse,
     SuccessMessage,
 )
 from services.auth import AuthService
@@ -30,7 +31,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
     responses={
         403: {
             "description": "User is inactive",
-            "content": {"application/json": {"example": {"detail": "User is inactive"}}},
+            "model": LoginErrorResponse,
         }
     },
 )
@@ -39,17 +40,23 @@ async def login(login_request: LoginRequest, db: db_dependency):
     authenticated_user = await auth_service.authenticate_user(login_request)
 
     if not authenticated_user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is inactive")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="err.login.inactive")
 
     token = auth_service.create_jwt_token(authenticated_user, timedelta(minutes=settings.JWT_EXPIRE_MINUTES))
 
-    return {"access_token": token, "token_type": "bearer"}
+    return LoginResponse(access_token=token, token_type="bearer")
 
 
 @router.post(
     "/register",
     status_code=status.HTTP_201_CREATED,
-    response_model=RegisterOrganizationResponse,
+    response_model=SuccessMessage,
+    responses={
+        400: {
+            "description": "Invalid Field",
+            "model": RegisterOrganizationErrorResponse,
+        }
+    },
 )
 async def register_organization(
     background_tasks: BackgroundTasks,
@@ -60,14 +67,33 @@ async def register_organization(
     org = await auth_service.register_organization(org_data)
 
     # Send verification email
-    email_service = EmailService(db)
-    await email_service.send_verification_email(org.user, background_tasks)
+    # email_service = EmailService(db)
+    # await email_service.send_verification_email(org.user, background_tasks)
 
-    return org
+    return SuccessMessage(
+        success=True, status_code=status.HTTP_201_CREATED, message="Organization registered successfully"
+    )
 
 
 @router.get(
     "/verify-email",
+    status_code=status.HTTP_200_OK,
+    responses={
+        400: {
+            "description": "Invalid Token or Verification Token Expired",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_token": {"summary": "Invalid Token", "value": {"detail": "Invalid Token"}},
+                        "token_expired": {
+                            "summary": "Verification Token Expired",
+                            "value": {"detail": "Verification Token Expired"},
+                        },
+                    }
+                }
+            },
+        },
+    },
 )
 async def verify_email(token: str, db: db_dependency):
     email_service = EmailService(db)
@@ -99,6 +125,7 @@ async def forgot_password(
     response_model=SuccessMessage,
 )
 async def reset_password(
+    token: str,
     form_data: PasswordResetConfirm,
     db: db_dependency,
 ):
