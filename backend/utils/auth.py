@@ -11,6 +11,7 @@ from core import settings
 from database import db_dependency
 from models.user import User
 from schemas.auth import LoginRequest
+from fastapi import Request
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -59,3 +60,9 @@ async def get_current_user(db: db_dependency, authorization: str = Header(...)) 
 
 
 user_dependency = Annotated[dict[Any, Any], Depends(get_current_user)]  # pyright: ignore[reportExplicitAny]
+
+def get_client_ip(request: Request):
+    """يحصل على IP العميل مع التعامل مع البروكسي"""
+    if "x-forwarded-for" in request.headers:
+        return request.headers["x-forwarded-for"].split(",")[0]
+    return request.client.host

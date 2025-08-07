@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # File Upload Limits (in bytes)
     MAX_DOCUMENT_SIZE: int = 5 * 1024 * 1024  # 5MB
     MAX_SPREADSHEET_SIZE: int = 2 * 1024 * 1024  # 2MB
-
-
+    
+    PASSWORD_RESET_TIMEOUT_MINUTES: int = 1440  # 24 hours
+    MAX_ATTEMPTS: int = 3 
+    FRONTEND_RESET_URL: str = "https://yourfrontend.com/reset-password"
 settings = Settings()

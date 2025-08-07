@@ -93,3 +93,20 @@ class EmailService:
                 server.send_message(msg)
         except Exception as e:
             print(f"Failed to send email to {email}: {str(e)}")
+
+
+    
+    def send_password_reset_email(self, email: str, reset_url: str):
+        subject = "Password Reset Request"
+        body = f"""
+            <html>
+                <body>
+                    <h2>Password Reset</h2>
+                    <p>We received a request to reset your password.</p>
+                    <a href="{reset_url}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                        Reset Password</a>
+                    <p>This link expires in 24 hours. If you didn't request this, please ignore this email.</p>
+                </body>
+            </html>
+        """
+        self._send_email(email, subject, body)

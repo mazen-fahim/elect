@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING,List
 
 from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -10,7 +10,7 @@ from . import Base
 if TYPE_CHECKING:
     from .organization import Organization
     from .organization_admin import OrganizationAdmin
-
+    from .password_reset_tocken import PasswordResetToken
 
 class UserRole(enum.Enum):
     admin = "admin"
@@ -34,3 +34,14 @@ class User(Base):
     organization_admin: Mapped["OrganizationAdmin"] = relationship(
         "OrganizationAdmin", back_populates="user", uselist=False
     )
+
+    password_reset_tokens: Mapped[List["PasswordResetToken"]] = relationship(  # New relationship
+        "PasswordResetToken", 
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
+
+
+
+
+
