@@ -10,7 +10,6 @@ from core.shared import Country, Status
 if TYPE_CHECKING:
     from .candidate_participation import CandidateParticipation
     from .organization import Organization
-    from .organization_admin import OrganizationAdmin
 
 
 class Candidate(Base):
@@ -38,16 +37,8 @@ class Candidate(Base):
         nullable=False,
     )
 
-    organization_admin_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("organization_admins.user_id", ondelete="CASCADE"),
-        nullable=True,
-    )
-
     # Relationships
     organization: Mapped["Organization"] = relationship("Organization", back_populates="candidates")
-
-    organization_admin: Mapped["OrganizationAdmin"] = relationship("OrganizationAdmin", back_populates="candidates")
 
     participations: Mapped["CandidateParticipation"] = relationship(
         "CandidateParticipation", back_populates="candidate"
