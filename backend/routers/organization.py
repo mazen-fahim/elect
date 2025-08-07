@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 from sqlalchemy import select
 
-from database import db_dependency
+from core.dependencies import db_dependency
 from models.organization import Organization
 
-router = APIRouter(prefix="/organizations", tags=["organizations"])
+router = APIRouter(prefix="/organizations", tags=["Organizations"])
 
 
 @router.get("/")
