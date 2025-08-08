@@ -5,8 +5,11 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import AdminDashboard from './pages/AdminDashboard';
 import OrganizationDashboard from './pages/OrganizationDashboard';
+import OrganizationRegistration from './pages/OrganizationRegistration';
 import OrganizationLogin from './pages/OrganizationLogin';
+import VoterExperience from './pages/VoterExperience';
 import ElectionResults from './pages/ElectionResults';
+
 
 
 function App() {
@@ -19,6 +22,8 @@ function App() {
                     <Route path="/admin" element={<AdminDashboard />} />
                     <Route path="/org/:id/dashboard" element={<OrganizationDashboard />} />
                     <Route path="/login/org" element={<OrganizationLogin />} />
+                     <Route path="/register" element={<OrganizationRegistration />} />
+                    <Route path="/elections" element={<VoterExperience />} />
                     <Route path="/results/:electionId" element={<ElectionResults />} />
                     
                 </Routes>
