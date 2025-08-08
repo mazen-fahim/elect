@@ -21,7 +21,7 @@ services:
     volumes:
       - ./frontend:/app
       # FIX: each rebuild it make a new anonymous volume that should be rmoved manually
-      # - /app/node_modules #if my local machine has node_modules don't overwrite node_modules inside the contianer
+      - /app/node_modules #if my local machine has node_modules don't overwrite node_modules inside the contianer
     ports:
       - "3000:3000"
     # this is unnecessary for this frontend container (but for development sake just in case)
