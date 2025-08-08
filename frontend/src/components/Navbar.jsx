@@ -1,16 +1,22 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation , useNavigate } from 'react-router-dom';
 import { Vote, Home, Users, LogIn, UserPlus, Shield } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 let Navbar = () => {
     let { user, logout } = useApp();
     let location = useLocation();
+    let navigate = useNavigate();
 
     let isActive = (path) => {
         return location.pathname === path
             ? 'text-blue-600 bg-blue-50'
             : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50';
+    };
+
+    let handleLogout = () => {
+        logout();         
+        navigate('/');   
     };
 
     return (
@@ -63,7 +69,7 @@ let Navbar = () => {
                                     </Link>
                                 )}
                                 <button
-                                    onClick={logout}
+                                    onClick={handleLogout}
                                     className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors duration-200"
                                 >
                                     Logout
