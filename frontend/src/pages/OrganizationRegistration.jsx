@@ -7,6 +7,9 @@ let OrganizationRegistration = () => {
     let { addOrganization } = useApp();
     let navigate = useNavigate();
     let [currentStep, setCurrentStep] = useState(1);
+    let [errorMessage, setErrorMessage] = useState('');
+
+    // Form data for organization
     let [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -18,6 +21,8 @@ let OrganizationRegistration = () => {
         contactPerson: '',
         documents: null,
     });
+
+    // Form data for payment
     let [paymentData, setPaymentData] = useState({
         cardNumber: '',
         expiryDate: '',
@@ -35,45 +40,113 @@ let OrganizationRegistration = () => {
         'Other',
     ];
 
+    // Handle organization info changes
     let handleInputChange = (e) => {
         let { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
+        setErrorMessage('');
     };
 
+    // Handle payment info changes
     let handlePaymentChange = (e) => {
         let { name, value } = e.target;
         setPaymentData((prev) => ({ ...prev, [name]: value }));
+        setErrorMessage('');
     };
 
+    // Handle file upload
     let handleFileUpload = (e) => {
         let file = e.target.files[0];
         setFormData((prev) => ({ ...prev, documents: file }));
+        setErrorMessage('');
     };
 
+    // Validation functions
+    const validateStep1 = () => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^[0-9]{10,15}$/;
+        const urlRegex = /^(https?:\/\/)?([\w\d-]+\.)+\w{2,}(\/.+)?$/;
+
+        if (!formData.name || !formData.type || !formData.email || !formData.phone || !formData.address || !formData.contactPerson) {
+            setErrorMessage("Please fill in all required fields before continuing.");
+            return false;
+        }
+        if (!emailRegex.test(formData.email)) {
+            setErrorMessage("Please enter a valid email address.");
+            return false;
+        }
+        if (!phoneRegex.test(formData.phone)) {
+            setErrorMessage("Please enter a valid phone number (10-15 digits).");
+            return false;
+        }
+        if (formData.website && !urlRegex.test(formData.website)) {
+            setErrorMessage("Please enter a valid website URL.");
+            return false;
+        }
+        return true;
+    };
+
+    const validateStep2 = () => {
+        if (!formData.documents) {
+            setErrorMessage("Please upload your required documents before continuing.");
+            return false;
+        }
+        return true;
+    };
+
+    const validateStep3 = () => {
+        const cardNumberRegex = /^[0-9]{13,19}$/;
+        const expiryRegex = /^(0[1-9]|1[0-2])\/\d{2}$/;
+        const cvvRegex = /^[0-9]{3,4}$/;
+
+        if (!paymentData.cardNumber || !paymentData.expiryDate || !paymentData.cvv || !paymentData.cardName) {
+            setErrorMessage("Please fill in all payment fields.");
+            return false;
+        }
+        if (!cardNumberRegex.test(paymentData.cardNumber.replace(/\s/g, ''))) {
+            setErrorMessage("Please enter a valid card number.");
+            return false;
+        }
+        if (!expiryRegex.test(paymentData.expiryDate)) {
+            setErrorMessage("Please enter a valid expiry date (MM/YY).");
+            return false;
+        }
+        if (!cvvRegex.test(paymentData.cvv)) {
+            setErrorMessage("Please enter a valid CVV.");
+            return false;
+        }
+        return true;
+    };
+
+    // Go to next step with validation
+    let nextStep = () => {
+        if (currentStep === 1 && !validateStep1()) return;
+        if (currentStep === 2 && !validateStep2()) return;
+        setErrorMessage('');
+        setCurrentStep(prev => prev + 1);
+    };
+
+    // Go to previous step
+    let prevStep = () => {
+        setErrorMessage('');
+        if (currentStep > 1) {
+            setCurrentStep(prev => prev - 1);
+        }
+    };
+
+    // Final form submit
     let handleSubmit = async (e) => {
         e.preventDefault();
+        if (!validateStep3()) return;
 
-        if (currentStep === 3) {
-            setTimeout(() => {
-                const newOrg = addOrganization(formData);
-                alert('Registration successful! Your organization will be reviewed within 24-48 hours.');
-                navigate('/login/org');
-            }, 2000);
-        }
+        // Simulate saving to backend
+        setTimeout(() => {
+            addOrganization(formData);
+            navigate('/login/org');
+        }, 2000);
     };
 
-    let nextStep = () => {
-        if (currentStep < 3) {
-            setCurrentStep(currentStep + 1);
-        }
-    };
-
-    let prevStep = () => {
-        if (currentStep > 1) {
-            setCurrentStep(currentStep - 1);
-        }
-    };
-
+    // Step 1: Organization Information
     let renderStep1 = () => (
         <div className="space-y-6">
             <div>
@@ -177,6 +250,7 @@ let OrganizationRegistration = () => {
         </div>
     );
 
+    // Step 2: Documentation
     let renderStep2 = () => (
         <div className="space-y-6">
             <div>
@@ -229,9 +303,10 @@ let OrganizationRegistration = () => {
         </div>
     );
 
+    // Step 3: Payment Information
     let renderStep3 = () => (
         <div className="space-y-6">
-            <div>
+             <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">Payment Information</h3>
 
                 <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6 mb-6">
@@ -317,6 +392,7 @@ let OrganizationRegistration = () => {
                     <p className="text-gray-600">Join VoteSecure and start creating secure digital elections</p>
                 </div>
 
+                {/* Step indicators */}
                 <div className="flex items-center justify-center mb-8">
                     <div className="flex items-center space-x-4">
                         {[1, 2, 3].map((step) => (
@@ -340,7 +416,15 @@ let OrganizationRegistration = () => {
                     </div>
                 </div>
 
+                {/* Form container */}
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 p-8">
+                    {/* Error message box */}
+                    {errorMessage && (
+                        <div className="mb-6 p-4 bg-red-100 text-red-700 border border-red-300 rounded-lg">
+                            {errorMessage}
+                        </div>
+                    )}
+
                     <form onSubmit={handleSubmit}>
                         {currentStep === 1 && renderStep1()}
                         {currentStep === 2 && renderStep2()}
@@ -383,4 +467,3 @@ let OrganizationRegistration = () => {
 };
 
 export default OrganizationRegistration;
-
