@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException, status
+from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy import delete, select
 
 from core.settings import settings
@@ -15,7 +15,7 @@ class PasswordResetService:
     def __init__(self, db):
         self.db = db
 
-    async def request_password_reset(self, email: str):
+    async def request_password_reset(self, email: str, background_tasks: BackgroundTasks):
         result = await self.db.execute(select(User).where(User.email == email))
         user = result.scalar_one_or_none()
 
@@ -25,9 +25,9 @@ class PasswordResetService:
         token = await self._generate_verification_token(user.id)
 
         # Send email
-        reset_url = f"{settings.FRONTEND_VERIFICATION_URL}/reset-password?token={token}"
+        reset_url = f"{settings.FRONTEND_RESET_PASS_URL}/reset-password?token={token}"
         email_service = EmailService(self.db)
-        await email_service.send_password_reset_email(user.email, reset_url, token.expires_at)
+        await email_service.send_password_reset_email(user.email, reset_url, token.expires_at, background_tasks)
 
     async def _generate_verification_token(self, user_id: int) -> VerificationToken:
         """Generate and store a new verification token"""
@@ -41,7 +41,7 @@ class PasswordResetService:
         token = VerificationToken(
             token=str(uuid.uuid4()),
             user_id=user_id,
-            expires_at=datetime.now(UTC) + timedelta(hours=settings.PASSWORD_VERIFICATION_TOKEN_EXPIRE_HOURS),
+            expires_at=datetime.now(UTC) + timedelta(hours=settings.PASSWORD_RESET_TOKEN_EXPIRE_HOURS),
             type=TokenType.PASSWORD_RESET,
         )
 

@@ -67,8 +67,8 @@ async def register_organization(
     org = await auth_service.register_organization(org_data)
 
     # Send verification email
-    # email_service = EmailService(db)
-    # await email_service.send_verification_email(org.user, background_tasks)
+    email_service = EmailService(db)
+    await email_service.send_verification_email(org.user, background_tasks)
 
     return SuccessMessage(
         success=True, status_code=status.HTTP_201_CREATED, message="Organization registered successfully"
@@ -110,10 +110,11 @@ async def verify_email(token: str, db: db_dependency):
 async def forgot_password(
     request: PasswordResetRequest,
     db: db_dependency,
+    background_tasks: BackgroundTasks,
     client_ip: client_ip_dependency,
 ):
     password_reset_service = PasswordResetService(db)
-    await password_reset_service.request_password_reset(request.email)
+    await password_reset_service.request_password_reset(request.email, background_tasks)
     return SuccessMessage(
         success=True, status_code=status.HTTP_200_OK, message="Password reset email sent successfully"
     )
@@ -131,5 +132,5 @@ async def reset_password(
 ):
     """Complete password reset with token"""
     service = PasswordResetService(db)
-    await service.reset_password(form_data.token, form_data.new_password)
+    await service.reset_password(token, form_data.new_password)
     return SuccessMessage(success=True, status_code=status.HTTP_200_OK, message="Password reset successfully")
