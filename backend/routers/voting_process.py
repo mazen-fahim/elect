@@ -8,7 +8,17 @@ from schemas.voting_process import VotingProcessCreate, VotingProcessOut
 router = APIRouter(prefix="/voting-processes", tags=["voting_processes"])
 
 
-@router.post("/", response_model=VotingProcessOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=VotingProcessOut, status_code=status.HTTP_201_CREATED,
+              responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Voting process already exists",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Voting process already exists"}
+                }
+            }
+        }
+    })
 async def create_voting_process(process_data: VotingProcessCreate, db: db_dependency):
     # Check if voting process already exists
     result = await db.execute(
@@ -18,7 +28,10 @@ async def create_voting_process(process_data: VotingProcessCreate, db: db_depend
         )
     )
     if result.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Voting process already exists")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Voting process already exists"
+        )
 
     new_process = VotingProcess(**process_data.model_dump())
     db.add(new_process)
@@ -35,7 +48,19 @@ async def create_voting_process(process_data: VotingProcessCreate, db: db_depend
     return process_out
 
 
-@router.get("/{voter_id}", response_model=VotingProcessOut)
+@router.get("/{voter_id}", 
+            response_model=VotingProcessOut,
+              responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Voting process not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Voting process not found"}
+                }
+            }
+        }
+    }
+            )
 async def get_voting_process(voter_id: str, election_id: int, db: db_dependency):
     result = await db.execute(
         select(VotingProcess).where(
@@ -44,8 +69,10 @@ async def get_voting_process(voter_id: str, election_id: int, db: db_dependency)
     )
     process = result.scalar_one_or_none()
     if not process:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voting process not found")
-
+           raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Voting process not found"
+        )
     return VotingProcessOut(
         voter_hashed_national_id=process.voter_hashed_national_id,
         election_id=process.election_id,
