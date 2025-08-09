@@ -1,8 +1,8 @@
 """Initalize Models
 
-Revision ID: ac4552fca949
+Revision ID: ad0f604a4a1c
 Revises: 
-Create Date: 2025-08-07 17:15:11.578674
+Create Date: 2025-08-08 20:09:34.480638
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'ac4552fca949'
+revision: str = 'ad0f604a4a1c'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -25,7 +25,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(length=200), nullable=False),
     sa.Column('password', sa.String(length=200), nullable=False),
-    sa.Column('role', sa.Enum('admin', 'organization', 'organization_admin', name='userrole'), nullable=False),
+    sa.Column('role', sa.Enum('admin', 'organization', name='userrole'), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('last_access_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
@@ -38,7 +38,7 @@ def upgrade() -> None:
     sa.Column('status', sa.Enum('pending', 'accepted', 'rejected', name='status'), nullable=False),
     sa.Column('api_endpoint', sa.String(length=200), nullable=True),
     sa.Column('country', sa.Enum('Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia_and_Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina_Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape_Verde', 'Central_African_Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa_Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech_Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican_Republic', 'East_Timor', 'Ecuador', 'Egypt', 'El_Salvador', 'Equatorial_Guinea', 'Eritrea', 'Estonia', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea_Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Ivory_Coast', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Korea_North', 'Korea_South', 'Kosovo', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macedonia', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall_Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New_Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama', 'Papua_New_Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint_Kitts_and_Nevis', 'Saint_Lucia', 'Saint_Vincent_and_the_Grenadines', 'Samoa', 'San_Marino', 'Sao_Tome_and_Principe', 'Saudi_Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra_Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon_Islands', 'Somalia', 'South_Africa', 'South_Sudan', 'Spain', 'Sri_Lanka', 'Sudan', 'Suriname', 'Swaziland', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Togo', 'Tonga', 'Trinidad_and_Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'United_Arab_Emirates', 'United_Kingdom', 'United_States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican_City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe', name='country'), nullable=False),
-    sa.Column('address', sa.String(length=500), nullable=False),
+    sa.Column('address', sa.String(length=500), nullable=True),
     sa.Column('description', sa.String(length=1000), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
@@ -57,17 +57,6 @@ def upgrade() -> None:
     sa.UniqueConstraint('token')
     )
     op.create_index(op.f('ix_verification_tokens_id'), 'verification_tokens', ['id'], unique=False)
-    op.create_table('organization_admins',
-    sa.Column('first_name', sa.String(length=200), nullable=False),
-    sa.Column('last_name', sa.String(length=200), nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('organization_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('user_id'),
-    sa.UniqueConstraint('first_name'),
-    sa.UniqueConstraint('last_name')
-    )
     op.create_table('candidates',
     sa.Column('hashed_national_id', sa.String(length=200), nullable=False),
     sa.Column('create_req_status', sa.Enum('pending', 'accepted', 'rejected', name='status'), nullable=False),
@@ -83,8 +72,6 @@ def upgrade() -> None:
     sa.Column('description', sa.String(length=200), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('organization_id', sa.Integer(), nullable=False),
-    sa.Column('organization_admin_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['organization_admin_id'], ['organization_admins.user_id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('hashed_national_id')
     )
@@ -102,8 +89,6 @@ def upgrade() -> None:
     sa.Column('num_of_votes_per_voter', sa.Integer(), nullable=False),
     sa.Column('potential_number_of_voters', sa.Integer(), nullable=False),
     sa.Column('organization_id', sa.Integer(), nullable=False),
-    sa.Column('organization_admin_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['organization_admin_id'], ['organization_admins.user_id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -146,7 +131,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_elections_id'), table_name='elections')
     op.drop_table('elections')
     op.drop_table('candidates')
-    op.drop_table('organization_admins')
     op.drop_index(op.f('ix_verification_tokens_id'), table_name='verification_tokens')
     op.drop_table('verification_tokens')
     op.drop_table('organizations')
