@@ -5,10 +5,48 @@ from core.dependencies import db_dependency
 from models.election import Election
 from schemas.election import ElectionCreate, ElectionOut, ElectionUpdate
 
-router = APIRouter(prefix="/election", tags=["elections"])
+router = APIRouter(
+    prefix="/election",
+    tags=["elections"],
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {
+            "description": "Not authenticated",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Not authenticated"}
+                }
+            }
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Permission denied",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Permission denied"}
+                }
+            }
+        }
+    }
+)
 
 
-@router.get("/", response_model=list[ElectionOut])
+@router.get("/", 
+            response_model=list[ElectionOut],
+            summary="Get all elections",
+    description="Retrieve a list of all elections in the system",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Successful response with list of elections",
+            "content": {
+                "application/json": {
+                    "example": [{
+                        "id": 1,
+                        "title": "Annual Board Election",
+                        "status": "pending"
+                    }]
+                }
+            }
+        }
+    })
 async def get_all_elections(db: db_dependency):
     result = await db.execute(select(Election))
     elections = result.scalars().all()
@@ -16,7 +54,21 @@ async def get_all_elections(db: db_dependency):
 
 @router.get("/{election_id}",
     response_model=ElectionOut,
-   responses={
+   summary="Get specific election",
+    description="Retrieve details of a specific election by its ID",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Successful response with election details",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "title": "Annual Board Election",
+                        "status": "pending"
+                    }
+                }
+            }
+        },
         status.HTTP_404_NOT_FOUND: {
             "description": "Election not found",
             "content": {
@@ -39,13 +91,38 @@ async def get_specific_election(election_id: int, db: db_dependency):
 
 @router.post("/",
               response_model=ElectionOut, 
-              status_code=201,
-              responses={
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "End date must be after start date",
+             status_code=status.HTTP_201_CREATED,
+    summary="Create new election",
+    description="Create a new election with the provided details",
+    responses={
+        status.HTTP_201_CREATED: {
+            "description": "Election created successfully",
             "content": {
                 "application/json": {
-                    "example": {"detail": "End date must be after start date"}
+                    "example": {
+                        "id": 1,
+                        "title": "New Election",
+                        "status": "pending"
+                    }
+                }
+            }
+        },
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Invalid input data",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_dates": {
+                            "value": {
+                                "detail": "End date must be after start date"
+                            }
+                        },
+                        "missing_fields": {
+                            "value": {
+                                "detail": "Title is required"
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -79,21 +156,47 @@ async def create_election(election_data: ElectionCreate, db: db_dependency):
 
 @router.put("/{election_id}", 
             response_model=ElectionOut,
-            responses={
+            summary="Update election",
+    description="Update details of an existing election",
+    responses={
+        status.HTTP_200_OK: {
+            "description": "Election updated successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": 1,
+                        "title": "Updated Election",
+                        "status": "active"
+                    }
+                }
+            }
+        },
+        status.HTTP_400_BAD_REQUEST: {
+            "description": "Invalid input data",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "invalid_dates": {
+                            "value": {
+                                "detail": "End date must be after start date"
+                            }
+                        },
+                        "invalid_status": {
+                            "value": {
+                                "detail": "Cannot change status from completed to active"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         status.HTTP_404_NOT_FOUND: {
             "description": "Election not found",
             "content": {
                 "application/json": {
                     "example": {"detail": "Election not found"}
                 }
-            }
-        },
-        status.HTTP_400_BAD_REQUEST: {
-            "description": "End date must be after start date",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "End date must be after start date"}
-                }
+      
             }
         }
     }
@@ -133,13 +236,26 @@ async def update_election(election_id: int, election_data: ElectionUpdate, db: d
 
 
 @router.delete("/{election_id}",
-    status_code=204,
-     responses={
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete election",
+    description="Delete an election by its ID",
+    responses={
+        status.HTTP_204_NO_CONTENT: {
+            "description": "Election deleted successfully"
+        },
         status.HTTP_404_NOT_FOUND: {
             "description": "Election not found",
             "content": {
                 "application/json": {
                     "example": {"detail": "Election not found"}
+                }
+            }
+        },
+        status.HTTP_403_FORBIDDEN: {
+            "description": "Cannot delete election in progress",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Cannot delete election in 'active' status"}
                 }
             }
         }
@@ -154,6 +270,17 @@ async def delete_election(election_id: int, db: db_dependency):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Election not found"
         )
+    await db.delete(election)
+    await db.commit()
+    
+
+    # Add business logic to prevent deletion of active elections
+    if election.status == 'active':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot delete election in 'active' status"
+        )
+
     await db.delete(election)
     await db.commit()
     return {"detail": "Election deleted successfully"}
