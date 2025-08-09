@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, Calendar, Users, Vote, Eye, Plus, Edit, Trash2, AlertCircle } from 'lucide-react';
 import api from '../services/api';
 import ElectionDetails from './ElectionDetails';
+import DeleteConfirmationModal from './DeleteConfirmationModal';
+import ElectionEditModal from './ElectionEditModal';
+import Toast from './Toast';
 
 const ElectionsList = ({ onCreateElection }) => {
     const [elections, setElections] = useState([]);
@@ -13,6 +16,11 @@ const ElectionsList = ({ onCreateElection }) => {
     const [activeTab, setActiveTab] = useState('all');
     const [selectedElection, setSelectedElection] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [electionToDelete, setElectionToDelete] = useState(null);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [electionToEdit, setElectionToEdit] = useState(null);
+    const [toast, setToast] = useState({ isVisible: false, type: '', message: '' });
 
     useEffect(() => {
         fetchElections();
@@ -63,25 +71,60 @@ const ElectionsList = ({ onCreateElection }) => {
         setShowDetails(true);
     };
 
-    const handleEditElection = (election) => {
-        setShowDetails(false);
-        // TODO: Implement edit election modal
-        console.log('Edit election:', election);
-        alert('Edit functionality will be implemented in the next step');
+    const showToast = (type, message) => {
+        setToast({ isVisible: true, type, message });
     };
 
-    const handleDeleteElection = async (election) => {
-        if (window.confirm(`Are you sure you want to delete "${election.title}"? This action cannot be undone.`)) {
-            try {
-                await api.delete(`/election/${election.id}`);
-                await fetchElections(); // Refresh the list
-                setShowDetails(false);
-                alert('Election deleted successfully');
-            } catch (error) {
-                console.error('Error deleting election:', error);
-                alert('Failed to delete election. Please try again.');
+    const hideToast = () => {
+        setToast({ isVisible: false, type: '', message: '' });
+    };
+
+    const handleEditElection = (election) => {
+        setElectionToEdit(election);
+        setShowEditModal(true);
+        setShowDetails(false);
+    };
+
+    const handleEditSuccess = async () => {
+        await fetchElections(); // Refresh the list to show updated data
+        setShowEditModal(false);
+        setElectionToEdit(null);
+        showToast('success', 'Election updated successfully!');
+    };
+
+    const closeEditModal = () => {
+        setShowEditModal(false);
+        setElectionToEdit(null);
+    };
+
+    const handleDeleteElection = (election) => {
+        setElectionToDelete(election);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDeleteElection = async () => {
+        if (!electionToDelete) return;
+        
+        try {
+            await api.delete(`/election/${electionToDelete.id}`);
+            await fetchElections(); // Refresh the list
+            setShowDetails(false);
+            setShowDeleteModal(false);
+            setElectionToDelete(null);
+            showToast('success', 'Election deleted successfully');
+        } catch (error) {
+            console.error('Error deleting election:', error);
+            if (error.response?.status === 400) {
+                showToast('error', 'Cannot delete this election. Only upcoming elections can be deleted.');
+            } else {
+                showToast('error', 'Failed to delete election. Please try again.');
             }
         }
+    };
+
+    const cancelDeleteElection = () => {
+        setShowDeleteModal(false);
+        setElectionToDelete(null);
     };
 
     const closeDetails = () => {
@@ -279,18 +322,32 @@ const ElectionsList = ({ onCreateElection }) => {
                                         </button>
                                     )}
                                     <button 
-                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                        title="Edit Election"
+                                        className={`p-2 rounded-lg transition-colors ${
+                                            election.computed_status === 'upcoming'
+                                                ? 'text-blue-600 hover:bg-blue-50 cursor-pointer' 
+                                                : 'text-gray-400 cursor-not-allowed'
+                                        }`}
+                                        title={election.computed_status === 'upcoming' 
+                                            ? "Edit Election" 
+                                            : "Only upcoming elections can be edited"
+                                        }
                                         disabled={election.computed_status !== 'upcoming'}
-                                        onClick={() => handleEditElection(election)}
+                                        onClick={() => election.computed_status === 'upcoming' && handleEditElection(election)}
                                     >
                                         <Edit className="h-4 w-4" />
                                     </button>
                                     <button 
-                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                        title="Delete Election"
+                                        className={`p-2 rounded-lg transition-colors ${
+                                            election.computed_status === 'upcoming'
+                                                ? 'text-red-600 hover:bg-red-50 cursor-pointer' 
+                                                : 'text-gray-400 cursor-not-allowed'
+                                        }`}
+                                        title={election.computed_status === 'upcoming' 
+                                            ? "Delete Election" 
+                                            : "Only upcoming elections can be deleted"
+                                        }
                                         disabled={election.computed_status !== 'upcoming'}
-                                        onClick={() => handleDeleteElection(election)}
+                                        onClick={() => election.computed_status === 'upcoming' && handleDeleteElection(election)}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </button>
@@ -344,6 +401,30 @@ const ElectionsList = ({ onCreateElection }) => {
                 onClose={closeDetails}
                 onEdit={handleEditElection}
                 onDelete={handleDeleteElection}
+            />
+
+            {/* Edit Modal */}
+            <ElectionEditModal
+                election={electionToEdit}
+                isOpen={showEditModal}
+                onClose={closeEditModal}
+                onSuccess={handleEditSuccess}
+            />
+
+            {/* Delete Confirmation Modal */}
+            <DeleteConfirmationModal
+                isOpen={showDeleteModal}
+                onClose={cancelDeleteElection}
+                onConfirm={confirmDeleteElection}
+                election={electionToDelete}
+            />
+
+            {/* Toast Notifications */}
+            <Toast
+                type={toast.type}
+                message={toast.message}
+                isVisible={toast.isVisible}
+                onClose={hideToast}
             />
         </div>
     );

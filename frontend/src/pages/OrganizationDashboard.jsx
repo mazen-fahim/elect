@@ -1,23 +1,37 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Upload, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2 } from 'lucide-react';
 import CandidatesList from "../components/CandidatesList";
 import ElectionsList from "../components/ElectionsList";
+import NotificationList from "../components/NotificationList";
+
 import { useOrganizationDashboardStats } from '../hooks/useOrganization';
 
 
 
 let OrganizationDashboard = () => {
     let { id } = useParams();
-    let { user, organizations, elections, candidates, addElection, addCandidate, notifications } = useApp();
+    let { user, isLoading, organizations, elections, candidates, addElection, addCandidate, notifications } = useApp();
     let [activeTab, setActiveTab] = useState('overview');
     let [showCreateElection, setShowCreateElection] = useState(false);
-    let [showUploadWarning, setShowUploadWarning] = useState(false);
+
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
 
     // Fetch dashboard stats from API
     const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useOrganizationDashboardStats();
+
+    // Show loading while checking authentication
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+                    <p className="text-gray-600">Loading...</p>
+                </div>
+            </div>
+        );
+    }
 
     // Check if user is logged in and is an organization
     if (!user || user.role !== 'organization') {
@@ -413,57 +427,7 @@ let OrganizationDashboard = () => {
         );
     };
 
-    let FileUploadWithSecurityWarning = () => {
-        return (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload Voter List (CSV)</h3>
 
-                {showUploadWarning && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                        <div className="flex items-start space-x-3">
-                            <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5" />
-                            <div>
-                                <h4 className="text-sm font-medium text-yellow-800">Security Warning</h4>
-                                <p className="text-sm text-yellow-700 mt-1">
-                                    Uploading CSV files for voter verification is less secure than using API
-                                    integration. This method is recommended only for small organizations with limited
-                                    technical resources. Ensure your CSV file contains only necessary data and is
-                                    properly secured.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">Drop your CSV file here or click to browse</p>
-                    <input
-                        type="file"
-                        accept=".csv"
-                        className="hidden"
-                        id="csv-upload"
-                        onChange={() => setShowUploadWarning(true)}
-                    />
-                    <label
-                        htmlFor="csv-upload"
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200 cursor-pointer"
-                    >
-                        Choose File
-                    </label>
-                </div>
-
-                <div className="mt-4 text-sm text-gray-600">
-                    <p className="font-medium mb-2">CSV Format Requirements:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                        <li>Columns: National ID, Full Name, Email (optional)</li>
-                        <li>Maximum file size: 10MB</li>
-                        <li>Encoding: UTF-8</li>
-                    </ul>
-                </div>
-            </div>
-        );
-    };
 
     let renderOverview = () => {
         if (statsLoading) {
@@ -573,7 +537,6 @@ let OrganizationDashboard = () => {
                         { id: 'overview', label: 'Overview', icon: Vote },
                         { id: 'elections', label: 'Elections', icon: Vote },
                         { id: 'candidates', label: 'Candidates', icon: Users },
-                        { id: 'voters', label: 'Voter Management', icon: Upload },
                         { id: 'notifications', label: 'Notifications', icon: Bell },
                     ].map((tab) => {
                         const Icon = tab.icon;
@@ -607,7 +570,14 @@ let OrganizationDashboard = () => {
                    </div>
                 )}
 
-                {activeTab === 'voters' && <FileUploadWithSecurityWarning />}
+                {activeTab === 'notifications' && (
+                   <div className="space-y-6">
+                     <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
+                     <NotificationList />
+                   </div>
+                )}
+
+
 
                 {showCreateElection && <CreateElectionModal />}
             </div>

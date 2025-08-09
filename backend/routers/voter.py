@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from core.dependencies import db_dependency
 from models.voter import Voter
+
 from schemas.voter import VoterCreate, VoterOut, VoterUpdate
 
 router = APIRouter(prefix="/voters", tags=["voters"])
@@ -31,6 +33,9 @@ async def create_voter(voter_data: VoterCreate, db: db_dependency):
     voter_out = new_voter
     voter_out.election_title = new_voter.election.title
     return voter_out
+
+
+
 
 
 @router.get("/{voter_id}", response_model=VoterOut)

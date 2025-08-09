@@ -1,16 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Users, Vote, MapPin, Globe, Clock, User, Settings, Trash2, Edit3 } from 'lucide-react';
 import api from '../services/api';
+import CandidateDetails from './CandidateDetails';
 
 const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
     const [candidates, setCandidates] = useState([]);
+    const [electionData, setElectionData] = useState(null);
     const [loadingCandidates, setLoadingCandidates] = useState(false);
+    const [loadingElection, setLoadingElection] = useState(false);
+    
+    // Candidate details modal state
+    const [selectedCandidate, setSelectedCandidate] = useState(null);
+    const [showCandidateDetails, setShowCandidateDetails] = useState(false);
 
     useEffect(() => {
         if (isOpen && election) {
+            fetchElectionData();
             fetchCandidates();
         }
     }, [isOpen, election]);
+
+    const fetchElectionData = async () => {
+        try {
+            setLoadingElection(true);
+            const response = await api.get(`/election/${election.id}`);
+            setElectionData(response);
+        } catch (error) {
+            console.error('Error fetching election data:', error);
+            setElectionData(election); // fallback to passed election data
+        } finally {
+            setLoadingElection(false);
+        }
+    };
 
     const fetchCandidates = async () => {
         try {
@@ -24,6 +45,8 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
             setLoadingCandidates(false);
         }
     };
+
+
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleString('en-US', {
@@ -63,7 +86,27 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
         );
     };
 
-    const canEdit = election?.computed_status === 'upcoming';
+    // Use fresh election data if available, fallback to passed election
+    const currentElectionData = electionData || election;
+    const canEdit = currentElectionData?.computed_status === 'upcoming';
+
+    // Candidate interaction handlers
+    const handleCandidateClick = (candidate) => {
+        setSelectedCandidate(candidate);
+        setShowCandidateDetails(true);
+    };
+
+    const handleCandidateUpdated = (updatedCandidate) => {
+        setCandidates(prev => prev.map(c => 
+            c.hashed_national_id === updatedCandidate.hashed_national_id ? updatedCandidate : c
+        ));
+    };
+
+    const handleCandidateDeleted = (deletedCandidate) => {
+        setCandidates(prev => prev.filter(c => 
+            c.hashed_national_id !== deletedCandidate.hashed_national_id
+        ));
+    };
 
     if (!isOpen || !election) return null;
 
@@ -177,7 +220,7 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-xl font-semibold text-gray-900 flex items-center space-x-2">
                                 <User className="h-5 w-5" />
-                                <span>Candidates ({election.number_of_candidates})</span>
+                                <span>Candidates ({loadingCandidates ? '...' : candidates.length})</span>
                             </h3>
                         </div>
 
@@ -189,7 +232,11 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
                         ) : candidates.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {candidates.map((candidate, index) => (
-                                    <div key={candidate.hashed_national_id || index} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                                    <div 
+                                        key={candidate.hashed_national_id || index} 
+                                        className="border rounded-lg p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer group"
+                                        onClick={() => handleCandidateClick(candidate)}
+                                    >
                                         <div className="flex items-start space-x-3">
                                             {candidate.photo_url ? (
                                                 <img 
@@ -198,12 +245,12 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
                                                     className="w-12 h-12 rounded-full object-cover"
                                                 />
                                             ) : (
-                                                <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                                                    <User className="h-6 w-6 text-gray-400" />
+                                                <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                                                    <User className="h-6 w-6 text-gray-400 group-hover:text-blue-500" />
                                                 </div>
                                             )}
                                             <div className="flex-1 min-w-0">
-                                                <h4 className="font-medium text-gray-900 truncate">{candidate.name}</h4>
+                                                <h4 className="font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors">{candidate.name}</h4>
                                                 {candidate.party && (
                                                     <p className="text-sm text-blue-600">{candidate.party}</p>
                                                 )}
@@ -226,6 +273,9 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
                                         {candidate.description && (
                                             <p className="text-xs text-gray-600 mt-2 line-clamp-2">{candidate.description}</p>
                                         )}
+                                        <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <p className="text-xs text-blue-500 font-medium">Click to view details →</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -254,6 +304,18 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
                     </div>
                 </div>
             </div>
+            
+            {/* Candidate Details Modal */}
+            <CandidateDetails
+                candidate={selectedCandidate}
+                isOpen={showCandidateDetails}
+                onClose={() => {
+                    setShowCandidateDetails(false);
+                    setSelectedCandidate(null);
+                }}
+                onUpdated={handleCandidateUpdated}
+                onDeleted={handleCandidateDeleted}
+            />
         </div>
     );
 };

@@ -4,7 +4,7 @@ import { Vote, Home, Users, LogIn, UserPlus, Shield } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 let Navbar = () => {
-    let { user, logout } = useApp();
+    let { user, isLoading, logout } = useApp();
     let location = useLocation();
     let navigate = useNavigate();
 
@@ -70,7 +70,12 @@ let Navbar = () => {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                        {user ? (
+                        {isLoading ? (
+                            <div className="flex items-center space-x-2">
+                                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                <span className="text-sm text-gray-600">Loading...</span>
+                            </div>
+                        ) : user ? (
                             <div className="flex items-center space-x-3">
                                 <span className="text-sm font-medium text-gray-700">
                                     Welcome, {user.role === 'organization' ? user.organizationName || user.name || 'Organization' : user.name || 'User'}

@@ -21,6 +21,7 @@ from schemas.auth import (
 from services.auth import AuthService
 from services.email import EmailService
 from services.reset_password import PasswordResetService
+from services.notification import NotificationService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

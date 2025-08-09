@@ -50,9 +50,9 @@ class CandidateUpdate(BaseModel):
     governorate: str | None = None
     country: Country | None = None
     party: str | None = None
-    symbol_icon_url: HttpUrl | None = None
+    symbol_icon_url: str | None = None
     symbol_name: str | None = None
-    photo_url: HttpUrl | None = None
+    photo_url: str | None = None
     birth_date: datetime | None = None
     description: str | None = None
 
