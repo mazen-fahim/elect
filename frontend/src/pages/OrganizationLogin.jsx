@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { LogIn, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useLogin } from '../hooks/useAuth';
 
 let OrganizationLogin = () => {
-    let { login, organizations } = useApp();
+    let { login } = useApp();
     let navigate = useNavigate();
     let [formData, setFormData] = useState({
         email: '',
@@ -12,6 +13,9 @@ let OrganizationLogin = () => {
     });
     let [showPassword, setShowPassword] = useState(false);
     let [error, setError] = useState('');
+    
+    // React Query mutation for login
+    const loginMutation = useLogin();
 
     let handleChange = (e) => {
         let { name, value } = e.target;
@@ -19,52 +23,51 @@ let OrganizationLogin = () => {
         setError('');
     };
 
-    let handleSubmit = (e) => {
+    let handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
 
-        let org = organizations.find((o) => o.email === formData.email);
+        try {
+            const response = await loginMutation.mutateAsync({
+                email: formData.email,
+                password: formData.password,
+            });
 
-        if (org && formData.password === 'password') {
-            // Mock password check
+            // Store the token
+            localStorage.setItem('authToken', response.access_token);
+            
+            // Fetch current user information
+            const { authApi } = await import('../services/api');
+            const userInfo = await authApi.getCurrentUser();
+            
+            // Create complete user data for the context
             let userData = {
-                id: org.id,
-                name: org.name,
-                email: org.email,
-                role: 'organization',
-                organizationId: org.id,
+                id: userInfo.id,
+                email: userInfo.email,
+                role: userInfo.role,
+                isActive: userInfo.is_active,
+                organizationId: userInfo.organization_id,
+                organizationName: userInfo.organization_name,
             };
+            
             login(userData);
-            navigate(`/org/${org.id}/dashboard`);
-        } else {
-            setError('Invalid email or password');
+            
+            // Navigate to appropriate dashboard based on role and organization
+            if (userInfo.role === 'organization' && userInfo.organization_id) {
+                navigate(`/org/${userInfo.organization_id}/dashboard`);
+            } else if (userInfo.role === 'admin') {
+                navigate('/admin');
+            } else {
+                navigate('/dashboard'); // fallback
+            }
+            
+        } catch (error) {
+            console.error('Login error:', error);
+            setError(error.message || 'Login failed. Please check your credentials.');
         }
     };
 
-    let handleDemoLogin = (orgEmail) => {
-        let org = organizations.find((o) => o.email === orgEmail);
-        if (org) {
-            const userData = {
-                id: org.id,
-                name: org.name,
-                email: org.email,
-                role: 'organization',
-                organizationId: org.id,
-            };
-            login(userData);
-            navigate(`/org/${org.id}/dashboard`);
-        }
-    };
 
-    let handleAdminLogin = () => {
-        let adminUser = {
-            id: 'admin1',
-            name: 'System Administrator',
-            email: 'admin@votesecure.com',
-            role: 'admin',
-        };
-        login(adminUser);
-        navigate('/admin');
-    };
 
     return (
         <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -152,43 +155,19 @@ let OrganizationLogin = () => {
 
                         <button
                             type="submit"
-                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                            disabled={loginMutation.isPending}
+                            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Sign In
+                            {loginMutation.isPending ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Signing In...
+                                </>
+                            ) : (
+                                'Sign In'
+                            )}
                         </button>
                     </form>
-
-                    <div className="mt-6">
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-300" />
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-2 bg-white text-gray-500">Or try demo accounts</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-6 space-y-3">
-                            <button
-                                onClick={() => handleDemoLogin('admin@democratic-movement.org')}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
-                            >
-                                Demo: Democratic Movement
-                            </button>
-                            <button
-                                onClick={() => handleDemoLogin('president@studentunion.edu')}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors duration-200"
-                            >
-                                Demo: Student Union
-                            </button>
-                            <button
-                                onClick={handleAdminLogin}
-                                className="w-full px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 transition-colors duration-200"
-                            >
-                                Demo: System Admin
-                            </button>
-                        </div>
-                    </div>
 
                     <div className="mt-6 text-center">
                         <p className="text-sm text-gray-600">

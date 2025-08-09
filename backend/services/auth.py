@@ -74,11 +74,13 @@ class AuthService:
                 if result.scalars().first():
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.name")
 
-                result = await self.db.execute(
-                    select(Organization).where(Organization.api_endpoint == str(org_data.api_endpoint))
-                )
-                if result.scalars().first():
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.api_endpoint")
+                # Only check API endpoint uniqueness if one is provided
+                if org_data.api_endpoint:
+                    result = await self.db.execute(
+                        select(Organization).where(Organization.api_endpoint == str(org_data.api_endpoint))
+                    )
+                    if result.scalars().first():
+                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.api_endpoint")
 
                 user = User(
                     email=str(org_data.email),
@@ -95,7 +97,7 @@ class AuthService:
                 org = Organization(
                     name=org_data.name,
                     status="pending",
-                    api_endpoint=str(org_data.api_endpoint),
+                    api_endpoint=str(org_data.api_endpoint) if org_data.api_endpoint else None,
                     country=org_data.country,
                     address=org_data.address,
                     description=org_data.description,
