@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .organization import Organization
     from .voter import Voter
     from .voting_process import VotingProcess
+    from .notification import Notification
 
 
 class Election(Base):
@@ -38,3 +39,4 @@ class Election(Base):
     voting_processes: Mapped["VotingProcess"] = relationship("VotingProcess", back_populates="election")
     voters: Mapped["Voter"] = relationship("Voter", back_populates="election")
     participations: Mapped["CandidateParticipation"] = relationship("CandidateParticipation", back_populates="election")
+    notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="election", foreign_keys="Notification.election_id")

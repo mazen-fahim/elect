@@ -25,7 +25,7 @@ function App() {
                      <Route path="/register" element={<OrganizationRegistration />} />
                     <Route path="/elections" element={<VoterExperience />} />
                     <Route path="/results/:electionId" element={<ElectionResults />} />
-                    
+                
                 </Routes>
             </div>
         </AppProvider>
