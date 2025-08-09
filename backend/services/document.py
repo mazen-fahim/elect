@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 
 import pandas as pd
@@ -46,7 +46,7 @@ class DocumentService:
             filepath=file_path,
             content_type=file.content_type,
             organization_id=org_id,
-            upload_date=datetime.now(),
+            upload_date=datetime.now(timezone.utc),
         )
         self.db.add(doc)
         await self.db.commit()
