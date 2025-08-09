@@ -1,42 +1,17 @@
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
+from datetime import datetime
+from typing import Annotated
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-import shutil, uuid, os
-from datetime import datetime
 
 from core.dependencies import db_dependency
+from core.shared import Country, Status
 from models import Candidate, Country, Status
 from schemas.candidate import CandidateRead
+from services.image import ImageService
 
 router = APIRouter(prefix="/candidates", tags=["Candidate"])
-
-async def upload_image(file: UploadFile) -> str:
-    # cloudinary.uploader.unsigned_upload(file=file)
-
-    if not cloudinary.config().api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Image upload service is not configured.",
-        )
-    loop = asyncio.get_running_loop()
-    try:
-        upload_result = await loop.run_in_executor(
-            None,
-            cloudinary.uploader.upload,
-            file.file,
-        )
-        secure_url = upload_result.get("secure_url")
-        if not secure_url:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Cloudinary did not return a secure URL.",
-            )
-        return secure_url
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to upload image: {e}",
-        )
 
 # @router.post("/", response_model=CandidateRead, status_code=status.HTTP_201_CREATED)
 # async def create_candidate(candidate_in: CandidateCreate, db: db_dependency):
@@ -92,21 +67,20 @@ async def get_candidate_by_id(hashed_national_id: str, db: db_dependency):
     return candidate
 
 
-
 # API to upload candidate image
 @router.post("/", response_model=CandidateRead, status_code=status.HTTP_201_CREATED)
 async def create_candidate(
-    hashed_national_id: str = Form(...),
-    name: str = Form(...),
-    country: Country = Form(...),
-    birth_date: datetime = Form(...),
-    party: str = Form(None),
-    symbol_name: str = Form(None),
-    description: str = Form(None),
-    organization_id: int = Form(...),
-    symbol_icon: UploadFile = File(None),
-    photo: UploadFile = File(None),
-    db: db_dependency = None
+    db: db_dependency,
+    hashed_national_id: Annotated[str, Form(...)],
+    name: Annotated[str, Form(...)],
+    country: Annotated[Country, Form(...)],
+    birth_date: Annotated[datetime, Form(...)],
+    party: Annotated[str | None, Form(None)],
+    symbol_name: Annotated[str | None, Form(None)],
+    description: Annotated[str | None, Form(None)],
+    organization_id: Annotated[int, Form(...)],
+    symbol_icon: Annotated[UploadFile | None, File(None)],
+    photo: Annotated[UploadFile | None, File(None)],
 ):
     # Check if the candidate already exists
     existing_candidate = (
@@ -115,15 +89,16 @@ async def create_candidate(
 
     if existing_candidate:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A candidate with this national ID already exists"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="A candidate with this national ID already exists"
         )
 
+    image_service = ImageService()
     # Save profile picture
-    photo_url = await upload_image(photo)
+
+    photo_url = await image_service.upload_image(photo)
 
     # Save the election symbol icon
-    symbol_icon_url = await upload_image(symbol_icon)
+    symbol_icon_url = await image_service.upload_image(symbol_icon)
 
     # Create a new Candidate
     new_candidate = Candidate(
@@ -137,7 +112,7 @@ async def create_candidate(
         organization_id=organization_id,
         photo_url=photo_url,
         symbol_icon_url=symbol_icon_url,
-        create_req_status=Status.pending
+        create_req_status=Status.pending,
     )
 
     db.add(new_candidate)
