@@ -236,6 +236,64 @@ const candidateApi = {
     });
   },
 };
+
+
+
+const notificationApi = {
+  list: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString ? `/notifications/?${queryString}` : '/notifications/';
+    return apiRequest(endpoint);
+  },
+
+  getById: async (notificationId) => {
+    return apiRequest(`/notifications/${notificationId}`);
+  },
+
+  getSummary: async () => {
+    return apiRequest('/notifications/summary');
+  },
+
+  markAsRead: async (notificationId) => {
+    return apiRequest(`/notifications/${notificationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_read: true }),
+    });
+  },
+
+  markAsUnread: async (notificationId) => {
+    return apiRequest(`/notifications/${notificationId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_read: false }),
+    });
+  },
+
+  markAllAsRead: async () => {
+    return apiRequest('/notifications/mark-all-read', {
+      method: 'PATCH',
+      body: JSON.stringify({ mark_all_read: true }),
+    });
+  },
+
+  delete: async (notificationId) => {
+    return apiRequest(`/notifications/${notificationId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getTypes: async () => {
+    return apiRequest('/notifications/types/available');
+  },
+
+  getPriorities: async () => {
+    return apiRequest('/notifications/priorities/available');
+  },
+};
+
 // Default export for easier importing
 const api = {
   get: (endpoint) => apiRequest(endpoint),
@@ -255,8 +313,9 @@ const api = {
   organization: organizationApi,
   election: electionApi,
   candidate: candidateApi,
+  notification: notificationApi,
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi };
 

@@ -150,6 +150,7 @@ class ElectionListResponse(BaseModel):
     total_vote_count: int
     number_of_candidates: int
     potential_number_of_voters: int
+    num_of_votes_per_voter: int
     method: str
     
     class Config:

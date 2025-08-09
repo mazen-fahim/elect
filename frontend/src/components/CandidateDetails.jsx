@@ -10,6 +10,8 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
   const [deleting, setDeleting] = useState(false);
   const [form, setForm] = useState({});
   const [elections, setElections] = useState([]);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [symbolIconFile, setSymbolIconFile] = useState(null);
 
   useEffect(() => {
     if (candidate) {
@@ -21,9 +23,10 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
         district: candidate.district || '',
         governorate: candidate.governorate || candidate.governerate || '',
         country: candidate.country || '',
-        photo_url: candidate.photo_url || '',
-        symbol_icon_url: candidate.symbol_icon_url || '',
       });
+      // Reset file inputs when candidate changes
+      setPhotoFile(null);
+      setSymbolIconFile(null);
     }
   }, [candidate]);
 
@@ -51,12 +54,52 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
   const handleSave = async () => {
     try {
       setSaving(true);
-      const payload = { ...form };
-      // remove empty strings
-      Object.keys(payload).forEach(k => (payload[k] === '' || payload[k] === null) && delete payload[k]);
-      const updated = await candidateApi.update(candidate.hashed_national_id, payload);
-      setEditing(false);
-      onUpdated && onUpdated(updated);
+      
+      // Use FormData if files are provided, otherwise use JSON
+      if (photoFile || symbolIconFile) {
+        const formData = new FormData();
+        
+        // Add form fields
+        Object.keys(form).forEach(key => {
+          if (form[key] !== '' && form[key] !== null && form[key] !== undefined) {
+            formData.append(key, form[key]);
+          }
+        });
+        
+        // Add files if provided
+        if (photoFile) {
+          formData.append('photo', photoFile);
+        }
+        if (symbolIconFile) {
+          formData.append('symbol_icon', symbolIconFile);
+        }
+        
+        // Call the new endpoint with file support
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost/api'}/candidates/${candidate.hashed_national_id}/with-files`, {
+          method: 'PUT',
+          headers: {
+            ...(localStorage.getItem('authToken') ? { Authorization: `Bearer ${localStorage.getItem('authToken')}` } : {})
+          },
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Failed to save candidate');
+        }
+        
+        const updated = await response.json();
+        setEditing(false);
+        onUpdated && onUpdated(updated);
+      } else {
+        // No files, use existing JSON API
+        const payload = { ...form };
+        // remove empty strings
+        Object.keys(payload).forEach(k => (payload[k] === '' || payload[k] === null) && delete payload[k]);
+        const updated = await candidateApi.update(candidate.hashed_national_id, payload);
+        setEditing(false);
+        onUpdated && onUpdated(updated);
+      }
     } catch (e) {
       alert(e?.message || 'Failed to save candidate');
     } finally {
@@ -284,22 +327,40 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Photo URL</label>
-                  <input 
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                    value={form.photo_url||''} 
-                    onChange={e=>setForm({...form,photo_url:e.target.value})} 
-                    placeholder="Enter photo URL (optional)" 
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Photo</label>
+                  <div className="space-y-2">
+                    {candidate.photo_url && (
+                      <div className="flex items-center gap-2">
+                        <img src={candidate.photo_url} alt="Current photo" className="w-12 h-12 rounded object-cover border" />
+                        <span className="text-sm text-gray-500">Current photo</span>
+                      </div>
+                    )}
+                    <input 
+                      type="file"
+                      accept="image/*"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                      onChange={e => setPhotoFile(e.target.files[0] || null)}
+                    />
+                    <p className="text-xs text-gray-500">Upload a new photo to replace the current one</p>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Symbol Icon URL</label>
-                  <input 
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                    value={form.symbol_icon_url||''} 
-                    onChange={e=>setForm({...form,symbol_icon_url:e.target.value})} 
-                    placeholder="Enter symbol icon URL (optional)" 
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Symbol Icon</label>
+                  <div className="space-y-2">
+                    {candidate.symbol_icon_url && (
+                      <div className="flex items-center gap-2">
+                        <img src={candidate.symbol_icon_url} alt="Current symbol" className="w-12 h-12 rounded object-cover border" />
+                        <span className="text-sm text-gray-500">Current symbol icon</span>
+                      </div>
+                    )}
+                    <input 
+                      type="file"
+                      accept="image/*"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                      onChange={e => setSymbolIconFile(e.target.files[0] || null)}
+                    />
+                    <p className="text-xs text-gray-500">Upload a new symbol icon to replace the current one</p>
+                  </div>
                 </div>
               </div>
             </div>

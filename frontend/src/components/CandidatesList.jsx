@@ -390,10 +390,19 @@ const CandidatesList = () => {
 
   const onUpdated = (updated) => {
     setCandidates(prev => prev.map(c => c.hashed_national_id === updated.hashed_national_id ? updated : c));
+    // Also update the selected candidate if it matches the updated one
+    if (selected && selected.hashed_national_id === updated.hashed_national_id) {
+      setSelected(updated);
+    }
   };
 
   const onDeleted = (deleted) => {
     setCandidates(prev => prev.filter(c => c.hashed_national_id !== deleted.hashed_national_id));
+    // Close the details popup if the deleted candidate was selected
+    if (selected && selected.hashed_national_id === deleted.hashed_national_id) {
+      setSelected(null);
+      setShowDetails(false);
+    }
   };
 
   if (loading) return <div className="py-8 text-center">Loading...</div>;

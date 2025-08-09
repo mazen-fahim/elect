@@ -6,14 +6,20 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
+from sqlalchemy import func
 
 from core.dependencies import db_dependency, organization_dependency
 from core.shared import Country
 from models import Candidate
 from schemas.candidate import CandidateRead, CandidateCreate, CandidateUpdate, CandidateCreateResponse
 from services.image import ImageService
+from services.notification import NotificationService
+from schemas.notification import CandidateNotificationData
 
 router = APIRouter(prefix="/candidates", tags=["Candidate"])
+
+
+
 
 # @router.post("/", response_model=CandidateRead, status_code=status.HTTP_201_CREATED)
 # async def create_candidate(candidate_in: CandidateCreate, db: db_dependency):
@@ -250,7 +256,8 @@ async def update_candidate(
     from models.election import Election
     running_participation = None
     for p in candidate.participations:
-        election = (await db.execute(select(Election).where(Election.id == p.election_id))).scalar_one()
+        election_result = await db.execute(select(Election).where(Election.id == p.election_id))
+        election = election_result.scalar_one()
         # Consider 'running' if now between start and end
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
@@ -261,7 +268,11 @@ async def update_candidate(
     if running_participation:
         raise HTTPException(status_code=400, detail="Cannot edit candidate while their election is running")
 
-    for field, value in candidate_update.model_dump(exclude_unset=True).items():
+    # Track changes for notification
+    update_data = candidate_update.model_dump(exclude_unset=True)
+    changes_made = list(update_data.keys())
+    
+    for field, value in update_data.items():
         # map governorate to governerate in model
         if field == "governorate":
             setattr(candidate, "governerate", value)
@@ -270,6 +281,128 @@ async def update_candidate(
 
     await db.commit()
     await db.refresh(candidate)
+    
+    # Create notification for candidate update
+    if changes_made:
+        notification_service = NotificationService(db)
+        candidate_notification_data = CandidateNotificationData(
+            candidate_id=candidate.hashed_national_id,
+            candidate_name=candidate.name,
+            changes_made=changes_made
+        )
+        await notification_service.create_candidate_updated_notification(
+            organization_id=current_user.id,
+            candidate_data=candidate_notification_data
+        )
+    
+    return candidate
+
+
+@router.put("/{hashed_national_id}/with-files", response_model=CandidateRead)
+async def update_candidate_with_files(
+    hashed_national_id: str,
+    db: db_dependency,
+    current_user: organization_dependency,
+    name: Annotated[str | None, Form()] = None,
+    party: Annotated[str | None, Form()] = None,
+    symbol_name: Annotated[str | None, Form()] = None,
+    description: Annotated[str | None, Form()] = None,
+    district: Annotated[str | None, Form()] = None,
+    governorate: Annotated[str | None, Form()] = None,
+    country: Annotated[Country | None, Form()] = None,
+    birth_date: Annotated[datetime | None, Form()] = None,
+    photo: Annotated[UploadFile | None, File()] = None,
+    symbol_icon: Annotated[UploadFile | None, File()] = None,
+):
+    """Update candidate with support for file uploads"""
+    result = await db.execute(
+        select(Candidate)
+        .where(Candidate.hashed_national_id == hashed_national_id)
+        .options(selectinload(Candidate.participations))
+    )
+    candidate = result.scalar_one_or_none()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+
+    # If candidate is participating in a running election, prevent edits
+    from models.election import Election
+    running_participation = None
+    for p in candidate.participations:
+        election_result = await db.execute(select(Election).where(Election.id == p.election_id))
+        election = election_result.scalar_one()
+        # Consider 'running' if now between start and end
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        if election.starts_at <= now <= election.ends_at:
+            running_participation = p
+            break
+
+    if running_participation:
+        raise HTTPException(status_code=400, detail="Cannot edit candidate while their election is running")
+
+    # Handle file uploads
+    image_service = ImageService()
+    
+    # Upload new photo if provided
+    if photo:
+        photo_url = await image_service.upload_image(photo)
+        candidate.photo_url = photo_url
+    
+    # Upload new symbol icon if provided
+    if symbol_icon:
+        symbol_icon_url = await image_service.upload_image(symbol_icon)
+        candidate.symbol_icon_url = symbol_icon_url
+
+    # Track changes for notification
+    changes_made = []
+    
+    # Update other fields if provided
+    if name is not None:
+        candidate.name = name
+        changes_made.append("name")
+    if party is not None:
+        candidate.party = party
+        changes_made.append("party")
+    if symbol_name is not None:
+        candidate.symbol_name = symbol_name
+        changes_made.append("symbol_name")
+    if description is not None:
+        candidate.description = description
+        changes_made.append("description")
+    if district is not None:
+        candidate.district = district
+        changes_made.append("district")
+    if governorate is not None:
+        candidate.governerate = governorate  # Note the model field name
+        changes_made.append("governorate")
+    if country is not None:
+        candidate.country = country
+        changes_made.append("country")
+    if birth_date is not None:
+        candidate.birth_date = birth_date
+        changes_made.append("birth_date")
+
+    await db.commit()
+    await db.refresh(candidate)
+    
+    # Create notification for candidate update (including file uploads)
+    if changes_made or photo or symbol_icon:
+        if photo:
+            changes_made.append("photo")
+        if symbol_icon:
+            changes_made.append("symbol_icon")
+            
+        notification_service = NotificationService(db)
+        candidate_notification_data = CandidateNotificationData(
+            candidate_id=candidate.hashed_national_id,
+            candidate_name=candidate.name,
+            changes_made=changes_made
+        )
+        await notification_service.create_candidate_updated_notification(
+            organization_id=current_user.id,
+            candidate_data=candidate_notification_data
+        )
+    
     return candidate
 
 
@@ -371,12 +504,31 @@ async def delete_candidate(
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
     for p in candidate.participations:
-        election = (await db.execute(select(Election).where(Election.id == p.election_id))).scalar_one()
+        election_result = await db.execute(select(Election).where(Election.id == p.election_id))
+        election = election_result.scalar_one()
         if election.starts_at <= now <= election.ends_at:
             raise HTTPException(status_code=400, detail="Cannot delete candidate while their election is running")
 
+    # Store candidate info for notification before deletion
+    candidate_name = candidate.name
+    candidate_id = candidate.hashed_national_id
+    
     await db.delete(candidate)
     await db.commit()
+    
+    # Create notification for candidate deletion
+    try:
+        notification_service = NotificationService(db)
+        candidate_notification_data = CandidateNotificationData(
+            candidate_id=candidate_id,
+            candidate_name=candidate_name
+        )
+        await notification_service.create_candidate_deleted_notification(
+            organization_id=current_user.id,
+            candidate_data=candidate_notification_data
+        )
+    except Exception as e:
+        print(f"Warning: Failed to create notification: {e}")
 
 
 @router.post("/bulk", response_model=List[CandidateRead], status_code=status.HTTP_201_CREATED)

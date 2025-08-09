@@ -40,13 +40,26 @@ class ImageService:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Image upload service is not configured.",
             )
-        loop = asyncio.get_running_loop()
+        
         try:
-            upload_result = await loop.run_in_executor(
-                None,
-                cloudinary.uploader.upload,
-                file.file,
-            )
+            # Use a more robust async approach
+            def _upload_sync():
+                try:
+                    # Reset file pointer to beginning
+                    file.file.seek(0)
+                    upload_result = cloudinary.uploader.upload(file.file)
+                    return upload_result
+                except Exception as e:
+                    raise e
+            
+            # Use asyncio.to_thread for Python 3.9+ or fallback to run_in_executor
+            try:
+                upload_result = await asyncio.to_thread(_upload_sync)
+            except AttributeError:
+                # Fallback for older Python versions
+                loop = asyncio.get_event_loop()
+                upload_result = await loop.run_in_executor(None, _upload_sync)
+            
             secure_url = upload_result.get("secure_url")
             if not secure_url:
                 raise HTTPException(

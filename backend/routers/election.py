@@ -14,8 +14,26 @@ from models.election import Election
 from models.voter import Voter
 from schemas.election import ElectionCreate, ElectionOut, ElectionUpdate, ElectionListResponse, ElectionStatus
 from services.csv_handler import CSVHandler
+from services.notification import NotificationService
+from schemas.notification import ElectionNotificationData
+from sqlalchemy import func
 
 router = APIRouter(prefix="/election", tags=["elections"])
+
+
+async def _get_actual_candidate_count(election_id: int, db) -> int:
+    """Get the actual count of candidates for an election from the participation table"""
+    result = await db.execute(
+        select(func.count(CandidateParticipation.candidate_hashed_national_id))
+        .where(CandidateParticipation.election_id == election_id)
+    )
+    return result.scalar() or 0
+
+
+async def _sync_election_candidate_count(election: Election, db) -> None:
+    """Sync the election's candidate count with the actual count from participations"""
+    actual_count = await _get_actual_candidate_count(election.id, db)
+    election.number_of_candidates = actual_count
 
 
 @router.get("/", response_model=list[ElectionOut])
@@ -82,6 +100,7 @@ async def get_organization_elections(
             total_vote_count=election.total_vote_count,
             number_of_candidates=election.number_of_candidates,
             potential_number_of_voters=election.potential_number_of_voters,
+            num_of_votes_per_voter=election.num_of_votes_per_voter,
             method=election.method
         ))
     
@@ -188,7 +207,6 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
     if election_data.candidates:
         candidates_data = [candidate.model_dump() for candidate in election_data.candidates]
         await _create_candidates_from_data(candidates_data, new_election.id, organization_id, db)
-        candidates_count = len(candidates_data)
 
     # Handle voters if provided
     voters_count = 0
@@ -197,19 +215,33 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
         await _create_voters_from_data(voters_data, new_election.id, db)
         voters_count = len(voters_data)
 
-    # Update election with actual counts
-    new_election.number_of_candidates = candidates_count
+    # Sync election counts with actual data
+    await _sync_election_candidate_count(new_election, db)
     if voters_count > 0:
         new_election.potential_number_of_voters = voters_count
 
     await db.commit()
     await db.refresh(new_election)
+    
+    # Create notification for election creation
+    notification_service = NotificationService(db)
+    election_notification_data = ElectionNotificationData(
+        election_id=new_election.id,
+        election_title=new_election.title,
+        start_time=new_election.starts_at,
+        end_time=new_election.ends_at
+    )
+    await notification_service.create_election_created_notification(
+        organization_id=organization_id,
+        election_data=election_notification_data
+    )
+    
     return new_election
 
 
 @router.put("/{election_id}", response_model=ElectionOut)
-async def update_election(election_id: int, election_data: ElectionUpdate, db: db_dependency):
-    result = await db.execute(select(Election).where(Election.id == election_id))
+async def update_election(election_id: int, election_data: ElectionUpdate, db: db_dependency, current_user: organization_dependency):
+    result = await db.execute(select(Election).where(Election.id == election_id, Election.organization_id == current_user.id))
     election = result.scalar_one_or_none()
     if not election:
         raise HTTPException(status_code=404, detail="Election not found")
@@ -231,17 +263,45 @@ async def update_election(election_id: int, election_data: ElectionUpdate, db: d
     ):
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
-    for field, value in election_data.model_dump(exclude_unset=True).items():
+    # Check if election type is changing and validate CSV compatibility
+    if election_data.types and election_data.types != election.types and election.method == "csv":
+        await _validate_type_change_compatibility(db, election, election_data.types)
+
+    # Track changes for notification
+    update_data = election_data.model_dump(exclude_unset=True)
+    changes_made = list(update_data.keys())
+    
+    for field, value in update_data.items():
         setattr(election, field, value)
 
     await db.commit()
     await db.refresh(election)
+    
+    # TODO: Create notification for election update (temporarily disabled due to async issues)
+    # if changes_made:
+    #     notification_service = NotificationService(db)
+    #     election_notification_data = ElectionNotificationData(
+    #         election_id=election.id,
+    #         election_title=election.title,
+    #         start_time=election.starts_at,
+    #         end_time=election.ends_at
+    #     )
+    #     await notification_service.create_election_updated_notification(
+    #         organization_id=current_user.id,
+    #         election_data=election_notification_data,
+    #         changes_made=changes_made
+    #     )
+    
     return election
 
 
 @router.delete("/{election_id}", status_code=204)
-async def delete_election(election_id: int, db: db_dependency):
-    result = await db.execute(select(Election).where(Election.id == election_id))
+async def delete_election(election_id: int, db: db_dependency, current_user: organization_dependency):
+    """
+    Delete an election and all its associated records (candidates, voters, voting processes, notifications).
+    Only allows deletion of upcoming elections.
+    """
+    result = await db.execute(select(Election).where(Election.id == election_id, Election.organization_id == current_user.id))
     election = result.scalar_one_or_none()
     if not election:
         raise HTTPException(status_code=404, detail="Election not found")
@@ -252,8 +312,192 @@ async def delete_election(election_id: int, db: db_dependency):
     if not (now < election.starts_at):
         raise HTTPException(status_code=400, detail="Only upcoming elections can be deleted")
 
-    await db.delete(election)
-    await db.commit()
+    # Store election info for notification before deletion
+    election_title = election.title
+    election_id_for_notification = election.id
+    
+    try:
+        # Manually delete all related records to avoid CASCADE issues
+        
+        # 1. Delete candidate participations
+        from models.candidate_participation import CandidateParticipation
+        participations_result = await db.execute(
+            select(CandidateParticipation).where(CandidateParticipation.election_id == election_id)
+        )
+        participations = participations_result.scalars().all()
+        for participation in participations:
+            await db.delete(participation)
+        
+        # 2. Delete voters
+        voters_result = await db.execute(select(Voter).where(Voter.election_id == election_id))
+        voters = voters_result.scalars().all()
+        for voter in voters:
+            await db.delete(voter)
+        
+        # 3. Delete voting processes
+        from models.voting_process import VotingProcess
+        voting_processes_result = await db.execute(select(VotingProcess).where(VotingProcess.election_id == election_id))
+        voting_processes = voting_processes_result.scalars().all()
+        for voting_process in voting_processes:
+            await db.delete(voting_process)
+        
+        # 4. Delete notifications related to this election
+        from models.notification import Notification
+        notifications_result = await db.execute(select(Notification).where(Notification.election_id == election_id))
+        notifications = notifications_result.scalars().all()
+        for notification in notifications:
+            await db.delete(notification)
+        
+        # 5. Create notification before deleting the election
+        try:
+            notification_service = NotificationService(db)
+            await notification_service.create_election_deleted_notification(
+                organization_id=current_user.id,
+                election_title=election_title,
+                election_id=None  # Set to None since election will be deleted
+            )
+        except Exception as notification_error:
+            print(f"Warning: Failed to create deletion notification: {notification_error}")
+        
+        # 6. Finally delete the election itself
+        await db.delete(election)
+        
+        # Commit all deletions and the notification
+        await db.commit()
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete election: {str(e)}")
+
+
+@router.put("/{election_id}/replace-csv", response_model=ElectionOut)
+async def replace_election_csv_data(
+    election_id: int,
+    db: db_dependency,
+    current_user: organization_dependency,
+    title: str = Form(...),
+    types: str = Form(...),
+    starts_at: str = Form(...),
+    ends_at: str = Form(...),
+    potential_number_of_voters: int = Form(...),
+    candidates_file: UploadFile = File(...),
+    voters_file: UploadFile = File(...),
+    num_of_votes_per_voter: int = Form(1)
+):
+    """Replace election's CSV data (candidates and voters) with new files"""
+    
+    # Get the election
+    result = await db.execute(select(Election).where(Election.id == election_id, Election.organization_id == current_user.id))
+    election = result.scalar_one_or_none()
+    if not election:
+        raise HTTPException(status_code=404, detail="Election not found")
+
+    # Only allow editing upcoming elections
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if not (now < election.starts_at):
+        raise HTTPException(status_code=400, detail="Only upcoming elections can be edited")
+
+    # Validate that this is a CSV-based election
+    if election.method != "csv":
+        raise HTTPException(status_code=400, detail="CSV replacement is only available for CSV-based elections")
+
+    # Parse dates
+    try:
+        starts_at_dt = datetime.fromisoformat(starts_at.replace('Z', '+00:00'))
+        ends_at_dt = datetime.fromisoformat(ends_at.replace('Z', '+00:00'))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+    
+    if ends_at_dt <= starts_at_dt:
+        raise HTTPException(status_code=400, detail="End date must be after start date")
+
+    # Validate file types
+    if not candidates_file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Candidates file must be a CSV")
+    if not voters_file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Voters file must be a CSV")
+
+    try:
+        # Step 1: Delete existing candidates and voters for this election
+        # Delete candidate participations
+        from models.candidate_participation import CandidateParticipation
+        participations_result = await db.execute(
+            select(CandidateParticipation).where(CandidateParticipation.election_id == election_id)
+        )
+        participations = participations_result.scalars().all()
+        for participation in participations:
+            await db.delete(participation)
+        
+        # Delete voters
+        voters_result = await db.execute(select(Voter).where(Voter.election_id == election_id))
+        voters = voters_result.scalars().all()
+        for voter in voters:
+            await db.delete(voter)
+        
+        # Delete voting processes
+        from models.voting_process import VotingProcess
+        voting_processes_result = await db.execute(select(VotingProcess).where(VotingProcess.election_id == election_id))
+        voting_processes = voting_processes_result.scalars().all()
+        for voting_process in voting_processes:
+            await db.delete(voting_process)
+
+        # Step 2: Update election basic info
+        election.title = title
+        election.types = types
+        election.starts_at = starts_at_dt
+        election.ends_at = ends_at_dt
+        election.num_of_votes_per_voter = num_of_votes_per_voter
+        election.potential_number_of_voters = potential_number_of_voters
+
+        # Step 3: Process new CSV files
+        import pandas as pd
+        import io
+        
+        # Read candidates CSV
+        candidates_content = await candidates_file.read()
+        candidates_df = pd.read_csv(io.StringIO(candidates_content.decode('utf-8')))
+        
+        # Read voters CSV
+        voters_content = await voters_file.read()
+        voters_df = pd.read_csv(io.StringIO(voters_content.decode('utf-8')))
+        
+        # Validate required columns based on election type
+        await _validate_csv_columns(candidates_df, voters_df, types)
+        
+        # Create new candidates and voters
+        candidates_count = await _create_candidates_from_csv(db, election_id, current_user.id, candidates_df)
+        voters_count = await _create_voters_from_csv(db, election_id, voters_df)
+        
+        # Sync election counts with actual data
+        await _sync_election_candidate_count(election, db)
+        election.potential_number_of_voters = voters_count
+        
+        await db.commit()
+        await db.refresh(election)
+        
+        # TODO: Create notification for election update (temporarily disabled due to async issues)
+        # try:
+        #     notification_service = NotificationService(db)
+        #     election_notification_data = ElectionNotificationData(
+        #         election_id=election.id,
+        #         election_title=election.title,
+        #         start_time=election.starts_at,
+        #         end_time=election.ends_at
+        #     )
+        #     await notification_service.create_election_updated_notification(
+        #         organization_id=current_user.id,
+        #         election_data=election_notification_data,
+        #         changes_made=["csv_data_replaced", "candidates", "voters"]
+        #     )
+        # except Exception as notification_error:
+        #     print(f"Warning: Failed to create update notification: {notification_error}")
+        
+        return election
+        
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error processing CSV files: {str(e)}")
 
 
 @router.post("/{election_id}/candidates/csv", status_code=201)
@@ -276,8 +520,8 @@ async def upload_candidates_csv(
     # Create candidates
     await _create_candidates_from_data(candidates_data, election_id, current_user.id, db)
 
-    # Update candidate count
-    election.number_of_candidates += len(candidates_data)
+    # Sync candidate count with actual data
+    await _sync_election_candidate_count(election, db)
 
     await db.commit()
     return {"message": f"Successfully added {len(candidates_data)} candidates"}
@@ -399,6 +643,19 @@ async def create_election_with_csv(
         await db.commit()
         await db.refresh(new_election)
         
+        # Create notification for election creation
+        notification_service = NotificationService(db)
+        election_notification_data = ElectionNotificationData(
+            election_id=new_election.id,
+            election_title=new_election.title,
+            start_time=new_election.starts_at,
+            end_time=new_election.ends_at
+        )
+        await notification_service.create_election_created_notification(
+            organization_id=organization_id,
+            election_data=election_notification_data
+        )
+        
         return new_election
         
     except Exception as e:
@@ -432,6 +689,67 @@ async def _validate_csv_columns(candidates_df, voters_df, election_type):
     missing_voter_cols = [col for col in required_voter_cols if col not in voters_df.columns]
     if missing_voter_cols:
         raise ValueError(f"Missing required columns in voters CSV: {missing_voter_cols}")
+
+
+async def _validate_type_change_compatibility(db, election, new_election_type):
+    """
+    Validate that changing election type is compatible with existing CSV data.
+    Raises HTTPException if CSV files need to be replaced.
+    """
+    # Get current type requirements
+    current_type = election.types
+    
+    # Determine what additional columns are needed for the new type
+    def get_required_additional_columns(election_type):
+        if election_type == 'district_based':
+            return {'candidates': ['district'], 'voters': ['district']}
+        elif election_type == 'governorate_based':
+            return {'candidates': ['governorate'], 'voters': ['governorate']}
+        else:  # simple or api_managed
+            return {'candidates': [], 'voters': []}
+    
+    current_requirements = get_required_additional_columns(current_type)
+    new_requirements = get_required_additional_columns(new_election_type)
+    
+    # Check if new type requires additional columns that current type doesn't have
+    additional_candidate_cols = set(new_requirements['candidates']) - set(current_requirements['candidates'])
+    additional_voter_cols = set(new_requirements['voters']) - set(current_requirements['voters'])
+    
+    if additional_candidate_cols or additional_voter_cols:
+        # Check if we have any candidates or voters in the election
+        from models.candidate_participation import CandidateParticipation
+        candidates_result = await db.execute(
+            select(CandidateParticipation).where(CandidateParticipation.election_id == election.id)
+        )
+        has_candidates = len(candidates_result.scalars().all()) > 0
+        
+        voters_result = await db.execute(select(Voter).where(Voter.election_id == election.id))
+        has_voters = len(voters_result.scalars().all()) > 0
+        
+        if has_candidates or has_voters:
+            # Build error message
+            error_parts = []
+            if additional_candidate_cols:
+                error_parts.append(f"candidates CSV must include columns: {', '.join(additional_candidate_cols)}")
+            if additional_voter_cols:
+                error_parts.append(f"voters CSV must include columns: {', '.join(additional_voter_cols)}")
+            
+            error_message = f"Cannot change election type from '{current_type}' to '{new_election_type}' because existing CSV data is incompatible. " + \
+                          f"To change to '{new_election_type}' type, the {' and '.join(error_parts)}. " + \
+                          "Please upload new CSV files that include the required columns."
+            
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": "csv_compatibility_error",
+                    "message": error_message,
+                    "current_type": current_type,
+                    "new_type": new_election_type,
+                    "required_csv_replacement": True,
+                    "missing_candidate_columns": list(additional_candidate_cols),
+                    "missing_voter_columns": list(additional_voter_cols)
+                }
+            )
 
 
 async def _create_candidates_from_csv(db, election_id, organization_id, candidates_df):
