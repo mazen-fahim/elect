@@ -84,7 +84,8 @@ class AuthService:
                     email=str(org_data.email),
                     password=AuthService.get_password_hash(org_data.password),
                     role="organization",
-                    is_active=False,  # Initially inactive, needs verification
+                    # Fix: In production make it false and only activate it after email verification.
+                    is_active=True,
                     created_at=datetime.now(UTC),
                     last_access_at=datetime.now(UTC),
                 )
@@ -104,7 +105,7 @@ class AuthService:
                 self.db.add(org)
                 await self.db.flush()
 
-            await self.db.refresh(org)
+            await self.db.refresh(org, attribute_names=["user"])
             return org
 
         except IntegrityError:
