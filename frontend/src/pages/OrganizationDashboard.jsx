@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Upload, AlertTriangle } from 'lucide-react';
+import CandidateManagement from "../components/CandidateManagement";
+
+
 
 let OrganizationDashboard = () => {
     let { id } = useParams();
@@ -356,6 +359,10 @@ let OrganizationDashboard = () => {
                             ))}
                         </div>
                     </div>
+                )}
+
+                {activeTab === 'candidates' && (
+                   <CandidateManagement elections={orgElections} />
                 )}
 
                 {activeTab === 'voters' && <FileUploadWithSecurityWarning />}
