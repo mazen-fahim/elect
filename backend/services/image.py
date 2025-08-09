@@ -31,7 +31,10 @@ class ImageService:
         )
         print("Cloudinary configured successfully.")
 
-    async def upload_image(self, file: UploadFile) -> str:
+    async def upload_image(self, file: UploadFile | None) -> str | None:
+        if not file:
+            return None
+            
         if not cloudinary.config().api_key:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

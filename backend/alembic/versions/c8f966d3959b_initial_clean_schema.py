@@ -1,8 +1,8 @@
-"""Initalize Models
+"""initial_clean_schema
 
-Revision ID: ad0f604a4a1c
+Revision ID: c8f966d3959b
 Revises: 
-Create Date: 2025-08-08 20:09:34.480638
+Create Date: 2025-08-09 15:28:44.586960
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'ad0f604a4a1c'
+revision: str = 'c8f966d3959b'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -79,7 +79,6 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('types', sa.String(length=200), nullable=False),
     sa.Column('status', sa.String(length=200), nullable=False),
-    sa.Column('create_req_status', sa.String(length=200), nullable=False),
     sa.Column('title', sa.String(length=200), nullable=False),
     sa.Column('starts_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('ends_at', sa.DateTime(timezone=True), nullable=False),
@@ -88,6 +87,8 @@ def upgrade() -> None:
     sa.Column('number_of_candidates', sa.Integer(), nullable=False),
     sa.Column('num_of_votes_per_voter', sa.Integer(), nullable=False),
     sa.Column('potential_number_of_voters', sa.Integer(), nullable=False),
+    sa.Column('method', sa.String(length=50), nullable=False),
+    sa.Column('api_endpoint', sa.String(length=500), nullable=True),
     sa.Column('organization_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')

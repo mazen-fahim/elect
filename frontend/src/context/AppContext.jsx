@@ -145,6 +145,7 @@ export const AppProvider = ({ children }) => {
 
     let logout = () => {
         setUser(null);
+        localStorage.removeItem('authToken');
     };
 
     let addOrganization = (org) => {

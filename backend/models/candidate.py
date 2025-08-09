@@ -5,7 +5,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.base import Base
-from core.shared import Country, Status
+from core.shared import Country
 
 if TYPE_CHECKING:
     from .candidate_participation import CandidateParticipation
@@ -16,8 +16,6 @@ class Candidate(Base):
     __tablename__ = "candidates"
 
     hashed_national_id: Mapped[str] = mapped_column(String(200), primary_key=True)
-
-    create_req_status: Mapped[Status] = mapped_column(Enum(Status), default=Status.pending, nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     district: Mapped[str] = mapped_column(String(100), nullable=True)
     governerate: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -40,6 +38,8 @@ class Candidate(Base):
     # Relationships
     organization: Mapped["Organization"] = relationship("Organization", back_populates="candidates")
 
-    participations: Mapped["CandidateParticipation"] = relationship(
-        "CandidateParticipation", back_populates="candidate"
+    participations: Mapped[list["CandidateParticipation"]] = relationship(
+        "CandidateParticipation",
+        back_populates="candidate",
+        cascade="all, delete-orphan",
     )

@@ -9,7 +9,7 @@ from core.error_handler import handle_error
 
 # This needs to be imported before we call create on Base.metadata
 # because it registers the models with SQLAlchemy
-from routers import auth, election, organization, voter, voting_process
+from routers import auth, candidate, election, organization, voter, voting_process
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ api_router = APIRouter(prefix="/api")
 
 api_router.include_router(organization.router)
 api_router.include_router(election.router)
+api_router.include_router(candidate.router)
 api_router.include_router(voter.router)
 api_router.include_router(voting_process.router)
 api_router.include_router(auth.router)

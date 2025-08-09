@@ -19,7 +19,6 @@ class Election(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     types: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[str] = mapped_column(String(200))
-    create_req_status: Mapped[str] = mapped_column(String(200))
     title: Mapped[str] = mapped_column(String(200))
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -28,6 +27,10 @@ class Election(Base):
     number_of_candidates: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     num_of_votes_per_voter: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     potential_number_of_voters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    
+    # New fields for election creation method
+    method: Mapped[str] = mapped_column(String(50), nullable=False, default="api")  # 'api' or 'csv'
+    api_endpoint: Mapped[str] = mapped_column(String(500), nullable=True)  # For API method
 
     organization_id: Mapped[int] = mapped_column(Integer, ForeignKey("organizations.user_id", ondelete="CASCADE"))
 

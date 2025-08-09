@@ -55,4 +55,8 @@ def handle_error(request: Request, exc: HTTPException):
             )
 
         case _:
-            message = "Invlaid"
+            # Default case - return the original HTTPException as JSON
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail}
+            )
