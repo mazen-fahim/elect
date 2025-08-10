@@ -73,3 +73,12 @@ class SuccessMessage(BaseModel):
     success: bool
     status_code: int
     message: str
+
+
+class CurrentUserResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    is_active: bool
+    organization_id: int | None = None
+    organization_name: str | None = None
