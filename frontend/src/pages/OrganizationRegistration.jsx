@@ -1,311 +1,299 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
-import { Upload, Check } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { useRegisterOrganization } from '../hooks/useAuth';
+import { COUNTRIES } from '../constants/countries';
 
 let OrganizationRegistration = () => {
-    let { addOrganization } = useApp();
     let navigate = useNavigate();
     let [errorMessage, setErrorMessage] = useState('');
-    let [dataSource, setDataSource] = useState('api'); // 'api' or 'csv'
+    let [successMessage, setSuccessMessage] = useState('');
 
-    // Form data for organization
+    // React Query mutation for registration
+    const registerMutation = useRegisterOrganization();
+
+    // Form data based on backend ERD
     let [formData, setFormData] = useState({
-        name: '',
+        // User fields
         email: '',
         password: '',
         confirmPassword: '',
+        // Organization fields
+        name: '',
         country: '',
-        apiEndpoint: '',
-        csvFile: null,
         address: '',
         description: '',
+        api_endpoint: '',
     });
 
-    const countries = [
-        "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", 
-        "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
-        "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus",
-        "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
-        "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria",
-        "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada",
-        "Cape Verde", "Central African Republic", "Chad", "Chile", "China",
-        "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia",
-        "Cuba", "Cyprus", "Czech Republic", "Denmark", "Djibouti",
-        "Dominica", "Dominican Republic", "East Timor", "Ecuador", "Egypt",
-        "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Ethiopia",
-        "Fiji", "Finland", "France", "Gabon", "Gambia",
-        "Georgia", "Germany", "Ghana", "Greece", "Grenada",
-        "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti",
-        "Honduras", "Hungary", "Iceland", "India", "Indonesia",
-        "Iran", "Iraq", "Ireland", "Israel", "Italy",
-        "Ivory Coast", "Jamaica", "Japan", "Jordan", "Kazakhstan",
-        "Kenya", "Kiribati", "North Korea", "South Korea", "Kosovo",
-        "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon",
-        "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania",
-        "Luxembourg", "Macedonia", "Madagascar", "Malawi", "Malaysia",
-        "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania",
-        "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco",
-        "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar",
-        "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand",
-        "Nicaragua", "Niger", "Nigeria", "Norway", "Oman",
-        "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea",
-        "Paraguay", "Peru", "Philippines", "Poland", "Portugal",
-        "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis",
-        "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino",
-        "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles",
-        "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands",
-        "Somalia", "South Africa", "South Sudan", "Spain", "Sri Lanka",
-        "Sudan", "Suriname", "Swaziland", "Sweden", "Switzerland",
-        "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand",
-        "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey",
-        "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates",
-        "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu",
-        "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia",
-        "Zimbabwe"
-    ];
-
-    // Handle organization info changes
+    // Handle input changes
     let handleInputChange = (e) => {
         let { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
         setErrorMessage('');
-    };
-
-    // Handle file upload
-    let handleFileUpload = (e) => {
-        let file = e.target.files[0];
-        setFormData((prev) => ({ ...prev, csvFile: file }));
-        setErrorMessage('');
+        setSuccessMessage('');
     };
 
     // Validation function
     const validateForm = () => {
+    // Validation function
+    const validateForm = () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        
-        if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword || !formData.country) {
+        const urlRegex = /^(https?:\/\/)?([\w\d-]+\.)+\w{2,}(\/.+)?$/;
+
+        // Required fields validation
+        if (!formData.name || !formData.email || !formData.password || !formData.country) {
             setErrorMessage("Please fill in all required fields.");
             return false;
         }
-        
+
+        // Email validation
         if (!emailRegex.test(formData.email)) {
             setErrorMessage("Please enter a valid email address.");
             return false;
         }
-        
-        if (formData.password.length < 8) {
-            setErrorMessage("Password must be at least 8 characters long.");
+
+        // Password validation
+        if (formData.password.length < 6) {
+            setErrorMessage("Password must be at least 6 characters long.");
             return false;
         }
-        
+
+        // Confirm password validation
         if (formData.password !== formData.confirmPassword) {
             setErrorMessage("Passwords do not match.");
             return false;
         }
-        
+
+        // API endpoint validation (optional field)
+        if (formData.api_endpoint && !urlRegex.test(formData.api_endpoint)) {
+            setErrorMessage("Please enter a valid API endpoint URL.");
+            return false;
+        }
+
         return true;
     };
 
     // Form submit
+    // Form submit
     let handleSubmit = async (e) => {
         e.preventDefault();
         if (!validateForm()) return;
+        if (!validateForm()) return;
 
-        // Simulate saving to backend
-        setTimeout(() => {
-            addOrganization(formData);
-            navigate('/login/org');
-        }, 1000);
+        try {
+            // Prepare data for backend (exclude confirmPassword)
+            const { confirmPassword, ...registrationData } = formData;
+            
+            await registerMutation.mutateAsync(registrationData);
+            
+            setSuccessMessage("Registration successful! Please check your email to verify your account.");
+            setErrorMessage('');
+            
+            // Redirect to login after 3 seconds
+            setTimeout(() => {
+                navigate('/login/org');
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Registration error:', error);
+            
+            // Handle specific error responses
+            if (error.response?.field) {
+                const fieldErrors = {
+                    name: "Organization name already exists",
+                    email: "Email address already registered",
+                    api_endpoint: "API endpoint already in use"
+                };
+                setErrorMessage(fieldErrors[error.response.field] || error.message);
+            } else {
+                setErrorMessage(error.message || "Registration failed. Please try again.");
+            }
+        }
     };
+
+    // Organization registration form
+    let renderRegistrationForm = () => (
+        <div className="space-y-6">
+            <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-4">Organization Registration</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Organization Name - Required */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Organization Name *
+                        </label>
+                        <input
+                            type="text"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                        />
+                    </div>
+
+                    {/* Email - Required */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Email Address *
+                        </label>
+                        <input
+                            type="email"
+                            name="email"
+                            value={formData.email}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                        />
+                    </div>
+
+                    {/* Password - Required */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Password *
+                        </label>
+                        <input
+                            type="password"
+                            name="password"
+                            value={formData.password}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                            minLength="6"
+                        />
+                    </div>
+
+                    {/* Confirm Password - Required */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Confirm Password *
+                        </label>
+                        <input
+                            type="password"
+                            name="confirmPassword"
+                            value={formData.confirmPassword}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                        />
+                    </div>
+
+                    {/* Country - Required */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Country *
+                        </label>
+                        <select
+                            name="country"
+                            value={formData.country}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                        >
+                            <option value="">Select Country</option>
+                            {COUNTRIES.map((country) => (
+                                <option key={country} value={country}>
+                                    {country}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* API Endpoint - Optional */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            API Endpoint (Optional)
+                        </label>
+                        <input
+                            type="url"
+                            name="api_endpoint"
+                            value={formData.api_endpoint}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="https://api.yourorganization.com"
+                        />
+                    </div>
+
+                    {/* Address - Optional */}
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Address (Optional)
+                        </label>
+                        <input
+                            type="text"
+                            name="address"
+                            value={formData.address}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Organization address"
+                        />
+                    </div>
+
+                    {/* Description - Optional */}
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Description (Optional)
+                        </label>
+                        <textarea
+                            name="description"
+                            value={formData.description}
+                            onChange={handleInputChange}
+                            rows="4"
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Brief description of your organization..."
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+
 
     return (
         <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-4">Register Your Organization</h1>
-                    <p className="text-gray-600">Join our platform and start managing your elections</p>
+                    <p className="text-gray-600">Join our platform and start creating secure digital elections</p>
                 </div>
 
                 {/* Form container */}
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 p-8">
-                    {/* Error message box */}
+                    {/* Success message */}
+                    {successMessage && (
+                        <div className="mb-6 p-4 bg-green-100 text-green-700 border border-green-300 rounded-lg flex items-center">
+                            <CheckCircle className="h-5 w-5 mr-2" />
+                            {successMessage}
+                        </div>
+                    )}
+
+                    {/* Error message */}
                     {errorMessage && (
-                        <div className="mb-6 p-4 bg-red-100 text-red-700 border border-red-300 rounded-lg">
+                        <div className="mb-6 p-4 bg-red-100 text-red-700 border border-red-300 rounded-lg flex items-center">
+                            <AlertCircle className="h-5 w-5 mr-2" />
                             {errorMessage}
                         </div>
                     )}
 
                     <form onSubmit={handleSubmit}>
-                        <div className="space-y-6">
-                            <div>
-                                <h3 className="text-xl font-semibold text-gray-900 mb-4">Organization Information</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Organization Name *</label>
-                                        <input
-                                            type="text"
-                                            name="name"
-                                            value={formData.name}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            required
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Email Address *</label>
-                                        <input
-                                            type="email"
-                                            name="email"
-                                            value={formData.email}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            required
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Country *</label>
-                                        <select
-                                            name="country"
-                                            value={formData.country}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            required
-                                        >
-                                            <option value="">Select Country</option>
-                                            {countries.map((country) => (
-                                                <option key={country} value={country}>
-                                                    {country}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Password *</label>
-                                        <input
-                                            type="password"
-                                            name="password"
-                                            value={formData.password}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            required
-                                        />
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password *</label>
-                                        <input
-                                            type="password"
-                                            name="confirmPassword"
-                                            value={formData.confirmPassword}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            required
-                                        />
-                                    </div>
-                                    
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
-                                        <input
-                                            type="text"
-                                            name="address"
-                                            value={formData.address}
-                                            onChange={handleInputChange}
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        />
-                                    </div>
-                                    
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                                        <textarea
-                                            name="description"
-                                            value={formData.description}
-                                            onChange={handleInputChange}
-                                            rows="4"
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                            placeholder="Brief description of your organization..."
-                                        />
-                                    </div>
-                                    
-                                    <div className="md:col-span-2">
-                                        <h4 className="text-sm font-medium text-gray-700 mb-2">Data Source (Optional)</h4>
-                                        <div className="flex space-x-4 mb-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setDataSource('api')}
-                                                className={`px-4 py-2 rounded-lg font-medium ${
-                                                    dataSource === 'api' 
-                                                        ? 'bg-blue-600 text-white' 
-                                                        : 'bg-gray-200 text-gray-700'
-                                                }`}
-                                            >
-                                                API Endpoint
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setDataSource('csv')}
-                                                className={`px-4 py-2 rounded-lg font-medium ${
-                                                    dataSource === 'csv' 
-                                                        ? 'bg-blue-600 text-white' 
-                                                        : 'bg-gray-200 text-gray-700'
-                                                }`}
-                                            >
-                                                CSV File
-                                            </button>
-                                        </div>
-                                        
-                                        {dataSource === 'api' ? (
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">API Endpoint</label>
-                                                <input
-                                                    type="url"
-                                                    name="apiEndpoint"
-                                                    value={formData.apiEndpoint}
-                                                    onChange={handleInputChange}
-                                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                    placeholder="https://api.example.com/data"
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">CSV File</label>
-                                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-                                                    <input
-                                                        type="file"
-                                                        accept=".csv"
-                                                        className="hidden"
-                                                        id="csv-upload"
-                                                        onChange={handleFileUpload}
-                                                    />
-                                                    <label
-                                                        htmlFor="csv-upload"
-                                                        className="block text-center cursor-pointer"
-                                                    >
-                                                        {formData.csvFile ? (
-                                                            <p className="text-green-600">✓ {formData.csvFile.name} uploaded</p>
-                                                        ) : (
-                                                            <>
-                                                                <Upload className="h-6 w-6 text-gray-400 mx-auto mb-2" />
-                                                                <p className="text-gray-600">Click to upload CSV file</p>
-                                                            </>
-                                                        )}
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        {renderRegistrationForm()}
 
                         <div className="flex justify-end mt-8">
                             <button
                                 type="submit"
-                                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                                disabled={registerMutation.isPending}
+                                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                             >
-                                Register Organization
+                                {registerMutation.isPending ? (
+                                    <>
+                                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                                        Registering...
+                                    </>
+                                ) : (
+                                    'Complete Registration'
+                                )}
                             </button>
                         </div>
                     </form>

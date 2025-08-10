@@ -5,9 +5,10 @@ from fastapi.responses import RedirectResponse
 from fastapi_limiter.depends import RateLimiter
 from starlette import status
 
-from core.dependencies import client_ip_dependency, db_dependency
+from core.dependencies import client_ip_dependency, db_dependency, user_dependency
 from core.settings import settings
 from schemas.auth import (
+    CurrentUserResponse,
     LoginErrorResponse,
     LoginRequest,
     LoginResponse,
@@ -20,6 +21,7 @@ from schemas.auth import (
 from services.auth import AuthService
 from services.email import EmailService
 from services.reset_password import PasswordResetService
+from services.notification import NotificationService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -45,6 +47,40 @@ async def login(login_request: LoginRequest, db: db_dependency):
     token = auth_service.create_jwt_token(authenticated_user, timedelta(minutes=settings.JWT_EXPIRE_MINUTES))
 
     return LoginResponse(access_token=token, token_type="bearer")
+
+
+@router.get(
+    "/me",
+    status_code=status.HTTP_200_OK,
+    response_model=CurrentUserResponse,
+)
+async def get_current_user_info(user: user_dependency, db: db_dependency):
+    """Get current user information"""
+    from sqlalchemy.future import select
+    from models.organization import Organization
+    
+    # Get organization info if user is an organization
+    organization_id = None
+    organization_name = None
+    
+    if user.role.value == "organization":
+        result = await db.execute(select(Organization).where(Organization.user_id == user.id))
+        organization = result.scalars().first()
+        if organization:
+            organization_id = organization.user_id  # user_id is the primary key
+            organization_name = organization.name
+        else:
+            # If no organization found, this shouldn't happen for valid organization users
+            pass
+    
+    return CurrentUserResponse(
+        id=user.id,
+        email=user.email,
+        role=user.role.value,
+        is_active=user.is_active,
+        organization_id=organization_id,
+        organization_name=organization_name,
+    )
 
 
 @router.post(
