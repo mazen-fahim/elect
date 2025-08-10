@@ -44,6 +44,7 @@ router = APIRouter(prefix="/candidates", tags=["Candidate"])
 @router.get("/", response_model=list[CandidateRead])
 async def get_all_candidates(
     db: db_dependency,
+    current_user: organization_dependency,
     skip: int = 0,
     limit: int = 100,
     search: Optional[str] = None,
@@ -51,9 +52,13 @@ async def get_all_candidates(
     party: Optional[str] = None,
     country: Optional[Country] = None,
 ):
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
+    
+    # Filter candidates by the current user's organization
     query = select(Candidate).options(
         selectinload(Candidate.participations), selectinload(Candidate.organization)
-    )
+    ).where(Candidate.organization_id == organization_id)
 
     if search:
         # name ilike search
@@ -78,10 +83,18 @@ async def get_all_candidates(
 
 
 @router.get("/{hashed_national_id}", response_model=CandidateRead)
-async def get_candidate_by_id(hashed_national_id: str, db: db_dependency):
+async def get_candidate_by_id(
+    hashed_national_id: str, 
+    db: db_dependency,
+    current_user: organization_dependency
+):
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
+    
     query = (
         select(Candidate)
         .where(Candidate.hashed_national_id == hashed_national_id)
+        .where(Candidate.organization_id == organization_id)  # Only allow access to own organization's candidates
         .options(
             selectinload(Candidate.participations),
             selectinload(Candidate.organization),
@@ -92,14 +105,21 @@ async def get_candidate_by_id(hashed_national_id: str, db: db_dependency):
     candidate = result.scalars().first()
 
     if not candidate:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found ")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
     return candidate
 
 
 @router.get("/election/{election_id}", response_model=list[CandidateRead])
-async def get_candidates_by_election(election_id: int, db: db_dependency):
+async def get_candidates_by_election(
+    election_id: int, 
+    db: db_dependency,
+    current_user: organization_dependency
+):
     from models.candidate_participation import CandidateParticipation
+
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
 
     # Subquery to get candidate IDs participating in this election
     candidate_ids_subq = (
@@ -108,9 +128,11 @@ async def get_candidates_by_election(election_id: int, db: db_dependency):
     )
 
     # Fetch candidates via IN-subquery; load relationships safely
+    # Only return candidates from the current user's organization
     query = (
         select(Candidate)
         .where(Candidate.hashed_national_id.in_(candidate_ids_subq))
+        .where(Candidate.organization_id == organization_id)  # Only allow access to own organization's candidates
         .options(selectinload(Candidate.participations), selectinload(Candidate.organization))
     )
 
@@ -156,6 +178,9 @@ async def create_candidate(
         # Save the election symbol icon (optional)
         symbol_icon_url = await image_service.upload_image(symbol_icon)
 
+        # Store organization_id early to avoid expired attribute issues
+        org_id = organization_id or current_user.id
+        
         # Create a new Candidate
         new_candidate = Candidate(
             hashed_national_id=hashed_national_id,
@@ -165,7 +190,7 @@ async def create_candidate(
             party=party,
             symbol_name=symbol_name,
             description=description,
-            organization_id=organization_id or current_user.id,
+            organization_id=org_id,
             photo_url=photo_url,
             symbol_icon_url=symbol_icon_url,
         )
@@ -174,8 +199,7 @@ async def create_candidate(
         if district:
             new_candidate.district = district
         if governorate:
-            # model attribute is 'governerate'
-            setattr(new_candidate, 'governerate', governorate)
+            new_candidate.governorate = governorate
 
         db.add(new_candidate)
         await db.flush()
@@ -195,7 +219,6 @@ async def create_candidate(
         if len(elections) != len(unique_ids):
             raise HTTPException(status_code=400, detail="One or more elections were not found")
 
-        org_id = organization_id or current_user.id
         for e in elections:
             if e.organization_id != org_id:
                 raise HTTPException(status_code=403, detail="Not authorized to add candidate to one of the selected elections")
@@ -243,10 +266,15 @@ async def update_candidate(
     db: db_dependency,
     current_user: organization_dependency,
 ):
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
+    
+    # Only allow access to candidates from the current user's organization
     result = await db.execute(
         select(Candidate)
         .where(Candidate.hashed_national_id == hashed_national_id)
-        .options(selectinload(Candidate.participations))
+        .where(Candidate.organization_id == organization_id)  # Only allow access to own organization's candidates
+        .options(selectinload(Candidate.participations), selectinload(Candidate.organization))
     )
     candidate = result.scalar_one_or_none()
     if not candidate:
@@ -273,9 +301,9 @@ async def update_candidate(
     changes_made = list(update_data.keys())
     
     for field, value in update_data.items():
-        # map governorate to governerate in model
+        # map governorate to governorate in model (field names now match)
         if field == "governorate":
-            setattr(candidate, "governerate", value)
+            setattr(candidate, "governorate", value)
         else:
             setattr(candidate, field, value)
 
@@ -291,7 +319,7 @@ async def update_candidate(
             changes_made=changes_made
         )
         await notification_service.create_candidate_updated_notification(
-            organization_id=current_user.id,
+            organization_id=organization_id,
             candidate_data=candidate_notification_data
         )
     
@@ -315,10 +343,15 @@ async def update_candidate_with_files(
     symbol_icon: Annotated[UploadFile | None, File()] = None,
 ):
     """Update candidate with support for file uploads"""
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
+    
+    # Only allow access to candidates from the current user's organization
     result = await db.execute(
         select(Candidate)
         .where(Candidate.hashed_national_id == hashed_national_id)
-        .options(selectinload(Candidate.participations))
+        .where(Candidate.organization_id == organization_id)  # Only allow access to own organization's candidates
+        .options(selectinload(Candidate.participations), selectinload(Candidate.organization))
     )
     candidate = result.scalar_one_or_none()
     if not candidate:
@@ -373,7 +406,7 @@ async def update_candidate_with_files(
         candidate.district = district
         changes_made.append("district")
     if governorate is not None:
-        candidate.governerate = governorate  # Note the model field name
+        candidate.governorate = governorate  # Note the corrected model field name
         changes_made.append("governorate")
     if country is not None:
         candidate.country = country
@@ -399,7 +432,7 @@ async def update_candidate_with_files(
             changes_made=changes_made
         )
         await notification_service.create_candidate_updated_notification(
-            organization_id=current_user.id,
+            organization_id=organization_id,
             candidate_data=candidate_notification_data
         )
     
@@ -419,13 +452,17 @@ async def set_candidate_participations(
 ):
     from models.candidate_participation import CandidateParticipation
     from models.election import Election
-    from datetime import timezone
+    from datetime import datetime, timezone
 
-    # Load candidate and current participations
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
+
+    # Load candidate and current participations - only allow access to own organization's candidates
     result = await db.execute(
         select(Candidate)
         .where(Candidate.hashed_national_id == hashed_national_id)
-        .options(selectinload(Candidate.participations))
+        .where(Candidate.organization_id == organization_id)  # Only allow access to own organization's candidates
+        .options(selectinload(Candidate.participations), selectinload(Candidate.organization))
     )
     candidate = result.scalar_one_or_none()
     if not candidate:
@@ -438,7 +475,7 @@ async def set_candidate_participations(
     if len(elections) != len(target_ids):
         raise HTTPException(status_code=400, detail="One or more elections not found")
     for e in elections:
-        if e.organization_id != current_user.id:
+        if e.organization_id != organization_id:
             raise HTTPException(status_code=403, detail="Cannot assign participation to external election")
 
     # Compute diffs
@@ -490,10 +527,15 @@ async def delete_candidate(
     db: db_dependency,
     current_user: organization_dependency,
 ):
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
+    
+    # Only allow access to candidates from the current user's organization
     result = await db.execute(
         select(Candidate)
         .where(Candidate.hashed_national_id == hashed_national_id)
-        .options(selectinload(Candidate.participations))
+        .where(Candidate.organization_id == organization_id)  # Only allow access to own organization's candidates
+        .options(selectinload(Candidate.participations), selectinload(Candidate.organization))
     )
     candidate = result.scalar_one_or_none()
     if not candidate:
@@ -509,10 +551,6 @@ async def delete_candidate(
         if election.starts_at <= now <= election.ends_at:
             raise HTTPException(status_code=400, detail="Cannot delete candidate while their election is running")
 
-    # Store candidate info for notification before deletion
-    candidate_name = candidate.name
-    candidate_id = candidate.hashed_national_id
-    
     await db.delete(candidate)
     await db.commit()
     
@@ -520,11 +558,11 @@ async def delete_candidate(
     try:
         notification_service = NotificationService(db)
         candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate_id,
-            candidate_name=candidate_name
+            candidate_id=candidate.hashed_national_id,
+            candidate_name=candidate.name
         )
         await notification_service.create_candidate_deleted_notification(
-            organization_id=current_user.id,
+            organization_id=organization_id,
             candidate_data=candidate_notification_data
         )
     except Exception as e:
@@ -538,6 +576,9 @@ async def create_candidates_bulk(
     current_user: organization_dependency
 ):
     """Create multiple candidates at once"""
+    # Store organization_id early to avoid expired attribute issues
+    organization_id = current_user.id
+    
     created_candidates = []
     
     for candidate_data in candidates_data:
@@ -557,7 +598,7 @@ async def create_candidates_bulk(
             hashed_national_id=candidate_data.hashed_national_id,
             name=candidate_data.name,
             district=candidate_data.district,
-            governerate=candidate_data.governorate,
+            governorate=candidate_data.governorate,
             country=candidate_data.country,
             party=candidate_data.party,
             symbol_name=candidate_data.symbol_name,
@@ -565,7 +606,7 @@ async def create_candidates_bulk(
             photo_url=str(candidate_data.photo_url) if candidate_data.photo_url else None,
             birth_date=candidate_data.birth_date,
             description=candidate_data.description,
-            organization_id=current_user.id,
+            organization_id=organization_id,
         )
         
         db.add(new_candidate)

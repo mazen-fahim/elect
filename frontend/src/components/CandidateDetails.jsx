@@ -21,7 +21,7 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
         symbol_name: candidate.symbol_name || '',
         description: candidate.description || '',
         district: candidate.district || '',
-        governorate: candidate.governorate || candidate.governerate || '',
+        governorate: candidate.governorate || '',
         country: candidate.country || '',
       });
       // Reset file inputs when candidate changes

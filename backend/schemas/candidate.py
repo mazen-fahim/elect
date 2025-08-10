@@ -4,11 +4,6 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel, HttpUrl
 
 from core.shared import Country
-try:
-    # Avoid importing SQLAlchemy models in Pydantic schemas; define read schema below
-    from models.candidate_participation import CandidateParticipation  # type: ignore
-except Exception:  # pragma: no cover
-    CandidateParticipation = None  # placeholder
 
 if TYPE_CHECKING:
     from models.organization import Organization

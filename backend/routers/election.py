@@ -37,8 +37,14 @@ async def _sync_election_candidate_count(election: Election, db) -> None:
 
 
 @router.get("/", response_model=list[ElectionOut])
-async def get_all_elections(db: db_dependency):
-    result = await db.execute(select(Election))
+async def get_all_elections(
+    db: db_dependency,
+    current_user: organization_dependency
+):
+    # Only return elections from the current user's organization
+    result = await db.execute(
+        select(Election).where(Election.organization_id == current_user.id)
+    )
     elections = result.scalars().all()
     return elections
 
@@ -108,8 +114,17 @@ async def get_organization_elections(
 
 
 @router.get("/{election_id}", response_model=ElectionOut)
-async def get_specific_election(election_id: int, db: db_dependency):
-    result = await db.execute(select(Election).where(Election.id == election_id))
+async def get_specific_election(
+    election_id: int, 
+    db: db_dependency,
+    current_user: organization_dependency
+):
+    # Only allow access to elections from the current user's organization
+    result = await db.execute(
+        select(Election)
+        .where(Election.id == election_id)
+        .where(Election.organization_id == current_user.id)
+    )
     election = result.scalar_one_or_none()
     if not election:
         raise HTTPException(status_code=404, detail="Election not found")
@@ -137,7 +152,7 @@ async def _create_candidates_from_data(
                 hashed_national_id=candidate_data["hashed_national_id"],
                 name=candidate_data["name"],
                 district=candidate_data.get("district"),
-                governerate=candidate_data.get("governorate"),
+                governorate=candidate_data.get("governorate"),
                 country=Country(candidate_data["country"]),
                 party=candidate_data.get("party"),
                 symbol_name=candidate_data.get("symbol_name"),
@@ -778,7 +793,7 @@ async def _create_candidates_from_csv(db, election_id, organization_id, candidat
                     hashed_national_id=hashed_id,
                     name=str(row['name']),
                     district=str(row.get('district', '')) if pd.notna(row.get('district')) else None,
-                    governerate=str(row.get('governorate', '')) if pd.notna(row.get('governorate')) else None,
+                    governorate=str(row.get('governorate', '')) if pd.notna(row.get('governorate')) else None,
                     country=str(row['country']),
                     party=str(row.get('party', '')) if pd.notna(row.get('party')) else None,
                     symbol_name=str(row.get('symbol_name', '')) if pd.notna(row.get('symbol_name')) else None,

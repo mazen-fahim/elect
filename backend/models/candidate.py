@@ -18,7 +18,7 @@ class Candidate(Base):
     hashed_national_id: Mapped[str] = mapped_column(String(200), primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     district: Mapped[str] = mapped_column(String(100), nullable=True)
-    governerate: Mapped[str] = mapped_column(String(100), nullable=True)
+    governorate: Mapped[str] = mapped_column(String(100), nullable=True)
     country: Mapped[Country] = mapped_column(Enum(Country), nullable=False)
     party: Mapped[str] = mapped_column(String(100), nullable=True)
     symbol_icon_url: Mapped[str] = mapped_column(String(500), nullable=True)

@@ -260,11 +260,11 @@ const ElectionDetails = ({ election, isOpen, onClose, onEdit, onDelete }) => {
                                                         <span className="text-xs text-gray-500">{candidate.country}</span>
                                                     </div>
                                                 )}
-                                                {(candidate.district || candidate.governerate) && (
+                                                {(candidate.district || candidate.governorate) && (
                                                     <div className="flex items-center space-x-1 mt-1">
                                                         <MapPin className="h-3 w-3 text-gray-400" />
                                                         <span className="text-xs text-gray-500">
-                                                            {candidate.district || candidate.governerate}
+                                                            {candidate.district || candidate.governorate}
                                                         </span>
                                                     </div>
                                                 )}
