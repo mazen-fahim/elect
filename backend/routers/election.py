@@ -195,7 +195,10 @@ async def _create_voters_from_data(voters_data: list[dict], election_id: int, db
 async def create_election(election_data: ElectionCreate, db: db_dependency, current_user: organization_dependency):
     """Create election with optional candidates and voters"""
     if election_data.ends_at <= election_data.starts_at:
-        raise HTTPException(status_code=400, detail="End date must be after start date")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="End date must be after start date"
+        )
 
     # Use the organization ID from the authenticated user
     organization_id = current_user.id
@@ -269,7 +272,10 @@ async def update_election(election_id: int, election_data: ElectionUpdate, db: d
 
     if election_data.starts_at and election_data.ends_at:
         if election_data.ends_at <= election_data.starts_at:
-            raise HTTPException(status_code=400, detail="End date must be after start date")
+             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End date must be after start date"
+            )
     elif (
         election_data.starts_at
         and election.ends_at <= election_data.starts_at
