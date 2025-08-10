@@ -36,8 +36,6 @@ let OrganizationRegistration = () => {
 
     // Validation function
     const validateForm = () => {
-    // Validation function
-    const validateForm = () => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const urlRegex = /^(https?:\/\/)?([\w\d-]+\.)+\w{2,}(\/.+)?$/;
 
@@ -75,10 +73,8 @@ let OrganizationRegistration = () => {
     };
 
     // Form submit
-    // Form submit
     let handleSubmit = async (e) => {
         e.preventDefault();
-        if (!validateForm()) return;
         if (!validateForm()) return;
 
         try {
@@ -248,8 +244,6 @@ let OrganizationRegistration = () => {
             </div>
         </div>
     );
-
-
 
     return (
         <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
