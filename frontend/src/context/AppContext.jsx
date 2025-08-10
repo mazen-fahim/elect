@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 let AppContext = createContext();
 
@@ -12,6 +12,7 @@ export const useApp = () => {
 
 export const AppProvider = ({ children }) => {
     let [user, setUser] = useState(null);
+    let [isLoading, setIsLoading] = useState(true);
     let [organizations, setOrganizations] = useState([
         {
             id: 'org1',
@@ -139,12 +140,46 @@ export const AppProvider = ({ children }) => {
     let [votes, setVotes] = useState([]);
     let [notifications, setNotifications] = useState([]);
 
+    // Initialize user state from token on app load
+    useEffect(() => {
+        const initializeAuth = async () => {
+            const token = localStorage.getItem('authToken');
+            if (token) {
+                try {
+                    // Import authApi dynamically to avoid circular dependencies
+                    const { authApi } = await import('../services/api');
+                    const userInfo = await authApi.getCurrentUser();
+                    
+                    // Create complete user data
+                    const userData = {
+                        id: userInfo.id,
+                        email: userInfo.email,
+                        role: userInfo.role,
+                        isActive: userInfo.is_active,
+                        organizationId: userInfo.organization_id,
+                        organizationName: userInfo.organization_name,
+                    };
+                    
+                    setUser(userData);
+                } catch (error) {
+                    console.error('Failed to restore user session:', error);
+                    // Token is invalid or expired, remove it
+                    localStorage.removeItem('authToken');
+                }
+            }
+            setIsLoading(false);
+        };
+
+        initializeAuth();
+    }, []);
+
     let login = (userData) => {
         setUser(userData);
     };
 
     let logout = () => {
         setUser(null);
+        localStorage.removeItem('authToken');
     };
 
     let addOrganization = (org) => {
@@ -198,6 +233,7 @@ export const AppProvider = ({ children }) => {
 
     let value = {
         user,
+        isLoading,
         organizations,
         elections,
         candidates,

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .candidate import Candidate
     from .election import Election
     from .user import User
+    from .notification import Notification
 
 
 class Organization(Base):
@@ -36,3 +37,5 @@ class Organization(Base):
     candidates: Mapped["Candidate"] = relationship("Candidate", back_populates="organization")
 
     elections: Mapped["Election"] = relationship("Election", back_populates="organization")
+    
+    notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="organization")

@@ -4,7 +4,7 @@ import { Vote, Home, Users, LogIn, UserPlus, Shield } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 let Navbar = () => {
-    let { user, logout } = useApp();
+    let { user, isLoading, logout } = useApp();
     let location = useLocation();
     let navigate = useNavigate();
 
@@ -31,20 +31,33 @@ let Navbar = () => {
                     </Link>
 
                     <div className="hidden md:flex items-center space-x-1">
-                        <Link
-                            to="/"
-                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/')}`}
-                        >
-                            <Home className="h-4 w-4" />
-                            <span>Home</span>
-                        </Link>
-                        <Link
-                            to="/elections"
-                            className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/elections')}`}
-                        >
-                            <Vote className="h-4 w-4" />
-                            <span>Elections</span>
-                        </Link>
+                        {/* Show different navigation based on user role */}
+                        {user?.role === 'organization' ? (
+                            <Link
+                                to={`/org/${user.organizationId}/dashboard`}
+                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive(`/org/${user.organizationId}/dashboard`)}`}
+                            >
+                                <Shield className="h-4 w-4" />
+                                <span>Dashboard</span>
+                            </Link>
+                        ) : (
+                            <>
+                                <Link
+                                    to="/"
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/')}`}
+                                >
+                                    <Home className="h-4 w-4" />
+                                    <span>Home</span>
+                                </Link>
+                                <Link
+                                    to="/elections"
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/elections')}`}
+                                >
+                                    <Vote className="h-4 w-4" />
+                                    <span>Elections</span>
+                                </Link>
+                            </>
+                        )}
                         {user?.role === 'admin' && (
                             <Link
                                 to="/admin"
@@ -57,9 +70,16 @@ let Navbar = () => {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                        {user ? (
+                        {isLoading ? (
+                            <div className="flex items-center space-x-2">
+                                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                <span className="text-sm text-gray-600">Loading...</span>
+                            </div>
+                        ) : user ? (
                             <div className="flex items-center space-x-3">
-                                <span className="text-sm font-medium text-gray-700">Welcome, {user.name}</span>
+                                <span className="text-sm font-medium text-gray-700">
+                                    Welcome, {user.role === 'organization' ? user.organizationName || user.name || 'Organization' : user.name || 'User'}
+                                </span>
                                 {user.role === 'organization' && (
                                     <Link
                                         to={`/org/${user.organizationId}/dashboard`}

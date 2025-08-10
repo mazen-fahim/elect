@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from core.dependencies import db_dependency
 from models.voter import Voter
+
 from schemas.voter import VoterCreate, VoterOut, VoterUpdate
 
 router = APIRouter(prefix="/voters", tags=["voters"])
@@ -71,34 +73,10 @@ async def create_voter(voter_data: VoterCreate, db: db_dependency):
     return voter_out
 
 
-@router.get("/{voter_hashed_national_id}", 
-            response_model=VoterOut,
-           summary="Get voter details",
-    description="Retrieves voter details for a specific election",
-    responses={
-        status.HTTP_200_OK: {
-            "description": "Successful response with voter details",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "voter_hashed_national_id": "a1b2c3d4...",
-                        "election_id": 1,
-                        "election_title": "Annual Board Election",
-                        "has_voted": False,
-                        "created_at": "2023-01-01T00:00:00"
-                    }
-                }
-            }
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "description": "Voter not found",
-            "content": {
-                "application/json": {
-                    "example": {"detail": "Voter not found"}
-                }
-            }
-        }
-    })
+
+
+
+@router.get("/{voter_id}", response_model=VoterOut)
 async def get_voter(voter_id: str, election_id: int, db: db_dependency):
     result = await db.execute(
         select(Voter).where(Voter.voter_hashed_national_id == voter_id, Voter.election_id == election_id)
