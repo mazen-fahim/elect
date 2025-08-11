@@ -58,12 +58,12 @@ async def get_current_user_info(user: user_dependency, db: db_dependency):
     """Get current user information"""
     from sqlalchemy.future import select
     from models.organization import Organization
-    
+
     # Get organization info if user is an organization
     organization_id = None
     organization_name = None
-    
-    if user.role.value == "organization":
+
+    if user.role.value in ["organization", "organization_admin"]:
         result = await db.execute(select(Organization).where(Organization.user_id == user.id))
         organization = result.scalars().first()
         if organization:
@@ -72,7 +72,7 @@ async def get_current_user_info(user: user_dependency, db: db_dependency):
         else:
             # If no organization found, this shouldn't happen for valid organization users
             pass
-    
+
     return CurrentUserResponse(
         id=user.id,
         email=user.email,
