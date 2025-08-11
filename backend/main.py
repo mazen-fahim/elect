@@ -19,6 +19,7 @@ from routers import (
     voting_process,
     organization_admin,
     approval,
+    home,
 )
 
 # Import all models to ensure they are registered
@@ -71,5 +72,6 @@ api_router.include_router(notification)
 api_router.include_router(auth)
 api_router.include_router(organization_admin)
 api_router.include_router(approval)
+api_router.include_router(home)
 
 app.include_router(api_router)
