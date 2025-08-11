@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Annotated, List, Optional
+from typing import Annotated, Optional
 import json
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
@@ -7,7 +7,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
-from sqlalchemy import func
+
 
 from core.dependencies import db_dependency, organization_dependency
 from models.user import UserRole
@@ -147,7 +147,7 @@ async def create_candidate(
     name: Annotated[str, Form(...)],
     country: Annotated[Country, Form(...)],
     birth_date: Annotated[datetime, Form(...)],
-    election_ids: Annotated[List[int], Form(...)],
+    election_ids: Annotated[list[int], Form(...)],
     organization_id: Annotated[int | None, Form()] = None,
     party: Annotated[str | None, Form()] = None,
     symbol_name: Annotated[str | None, Form()] = None,
@@ -236,7 +236,6 @@ async def create_candidate(
         # Link to elections via participations (required, one or more)
         from models.election import Election
         from models.candidate_participation import CandidateParticipation
-        from datetime import datetime, timezone
 
         # Normalize and validate list
         unique_ids = list(dict.fromkeys(election_ids))
@@ -319,7 +318,6 @@ async def update_candidate(
         election_result = await db.execute(select(Election).where(Election.id == p.election_id))
         election = election_result.scalar_one()
         # Consider 'running' if now between start and end
-        from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc)
         if election.starts_at <= now <= election.ends_at:
@@ -469,7 +467,7 @@ async def update_candidate_with_files(
 
 
 class ParticipationsUpdate(BaseModel):
-    election_ids: List[int]
+    election_ids: list[int]
 
 
 @router.put("/{hashed_national_id}/participations", response_model=CandidateRead)
@@ -481,7 +479,6 @@ async def set_candidate_participations(
 ):
     from models.candidate_participation import CandidateParticipation
     from models.election import Election
-    from datetime import datetime, timezone
 
     # Store organization_id early to avoid expired attribute issues
     organization_id = current_user.id
@@ -598,9 +595,9 @@ async def delete_candidate(
         print(f"Warning: Failed to create notification: {e}")
 
 
-@router.post("/bulk", response_model=List[CandidateRead], status_code=status.HTTP_201_CREATED)
+@router.post("/bulk", response_model=list[CandidateRead], status_code=status.HTTP_201_CREATED)
 async def create_candidates_bulk(
-    candidates_data: List[CandidateCreate], db: db_dependency, current_user: organization_dependency
+    candidates_data: list[CandidateCreate], db: db_dependency, current_user: organization_dependency
 ):
     """Create multiple candidates at once"""
     # Store organization_id early to avoid expired attribute issues
