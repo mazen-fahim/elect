@@ -95,7 +95,6 @@ async def get_current_user_info(user: user_dependency, db: db_dependency):
     },
 )
 async def register_organization(
-    background_tasks: BackgroundTasks,
     org_data: RegisterOrganizationRequest,
     db: db_dependency,
 ):
