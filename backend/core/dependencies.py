@@ -1,10 +1,13 @@
 from typing import Annotated
+from types import SimpleNamespace
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.future import select
 
 from core.settings import settings
 from models import User
+from models.organization_admin import OrganizationAdmin
 from models.user import UserRole
 from services.auth import AuthService
 
@@ -52,10 +55,27 @@ def get_admin(user: user_dependency):
 admin_dependency = Annotated[User, Depends(get_admin)]
 
 
-def get_organiztion(user: user_dependency):
-    if user.role not in [UserRole.organization]:
+async def get_organiztion(user: user_dependency, db: db_dependency):
+    # Allow both the organization boss and organization admins to access org-protected endpoints.
+    # Return an organization context object where `.id` is always the owning organization user ID.
+    if user.role not in [UserRole.organization, UserRole.organization_admin]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
-    return user
+
+    if user.role == UserRole.organization:
+        return user
+
+    # For organization_admin, map to the owning organization user id
+    # We cannot access DB here, so we rely on a lazy fetch pattern via separate dependency if needed.
+    # However, since we only need the mapped org id repeatedly, require an additional header would be clunky.
+    # Instead, do a best-effort lookup using a new DB session.
+    # Note: This uses a new session as dependencies are resolved before endpoint params.
+    res = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id))
+    mapping = res.scalars().first()
+    if not mapping:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not linked to any organization")
+
+    # Return a lightweight context object
+    return SimpleNamespace(id=mapping.organization_user_id, role=user.role, email=user.email)
 
 
 # Protect API endpoints with organization privileges

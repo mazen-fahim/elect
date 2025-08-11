@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 class UserRole(enum.Enum):
     admin = "admin"
     organization = "organization"
+    organization_admin = "organization_admin"
 
 
 class User(Base):
