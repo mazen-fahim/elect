@@ -7,6 +7,7 @@ from .organization_admin import router as organization_admin
 from .approval import router as approval
 from .voter import router as voter
 from .voting_process import router as voting_process
+from .home import router as home
 
 __all__ = [
     "auth",
@@ -18,4 +19,5 @@ __all__ = [
     "approval",
     "voter",
     "voting_process",
+    "home",
 ]
