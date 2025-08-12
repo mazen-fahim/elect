@@ -133,7 +133,7 @@ async def delete_org_admin(user_id: int, db: db_dependency, current_org_user: or
 async def update_self(
     payload: OrganizationAdminSelfUpdate,
     db: db_dependency,
-    current_user: User = organization_dependency,  # type: ignore
+    current_user: organization_dependency,
 ):
     # Only organization_admin can update self
     if current_user.role != UserRole.organization_admin:
