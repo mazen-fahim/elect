@@ -1,8 +1,9 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING , List
 
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from .candidate_voter_mapping import CandidateVoterMapping
 from core.shared import Country, Status
 
 
@@ -27,3 +28,6 @@ class Voter(Base):
 
     # Relationships
     election: Mapped["Election"] = relationship("Election", back_populates="voters")
+    candidate_mappings: Mapped[List["CandidateVoterMapping"]] = relationship(
+    "CandidateVoterMapping", back_populates="voter", cascade="all, delete-orphan"
+)

@@ -8,6 +8,8 @@ from .organization_admin import OrganizationAdmin
 from .user import User
 from .voter import Voter
 from .voting_process import VotingProcess
+from .candidate_voter_mapping import CandidateVoterMapping
+
 
 __all__ = [
     "Base",
@@ -19,4 +21,6 @@ __all__ = [
     "User",
     "Voter",
     "VotingProcess",
+    "CandidateVoterMapping",
+    
 ]
