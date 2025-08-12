@@ -97,6 +97,7 @@ async def get_current_user_info(user: user_dependency, db: db_dependency):
 async def register_organization(
     org_data: RegisterOrganizationRequest,
     db: db_dependency,
+    background_tasks: BackgroundTasks,
 ):
     auth_service = AuthService(db)
     org = await auth_service.register_organization(org_data)
