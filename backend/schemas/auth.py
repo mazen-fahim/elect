@@ -21,6 +21,8 @@ class RegisterOrganizationRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
+    first_name: str
+    last_name: str
     country: Country
     address: str | None = None
     description: str | None = None

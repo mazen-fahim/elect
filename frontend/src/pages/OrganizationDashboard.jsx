@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield } from 'lucide-react';
 import CandidatesList from "../components/CandidatesList";
 import ElectionsList from "../components/ElectionsList";
 import NotificationList from "../components/NotificationList";
+import Modal from "../components/Modal";
+import OrganizationAdminsTab from "../components/OrganizationAdminsTab";
 
 import { useOrganizationDashboardStats } from '../hooks/useOrganization';
 
@@ -17,9 +19,21 @@ let OrganizationDashboard = () => {
     let [showCreateElection, setShowCreateElection] = useState(false);
 
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
+    
+    // Modal state
+    let [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
 
     // Fetch dashboard stats from API
     const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useOrganizationDashboardStats();
+
+    // Helper function to show modals
+    let showModal = (title, message, type = 'info') => {
+        setModalConfig({ isOpen: true, title, message, type });
+    };
+
+    let closeModal = () => {
+        setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
+    };
 
     // Show loading while checking authentication
     if (isLoading) {
@@ -96,12 +110,12 @@ let OrganizationDashboard = () => {
             const endDateTime = new Date(formData.endDate);
             
             if (startDateTime < now) {
-                alert('Start date and time cannot be in the past.');
+                showModal('Invalid Date', 'Start date and time cannot be in the past.', 'error');
                 return;
             }
             
             if (endDateTime < startDateTime) {
-                alert('End date and time must be after or equal to start date and time.');
+                showModal('Invalid Date', 'End date and time must be after or equal to start date and time.', 'error');
                 return;
             }
             
@@ -138,14 +152,14 @@ let OrganizationDashboard = () => {
                 
             } catch (error) {
                 console.error('Error creating election:', error);
-                alert('Failed to create election. Please try again.');
+                showModal('Error', 'Failed to create election. Please try again.', 'error');
             }
         };
 
         let handleCsvElectionCreation = async () => {
             try {
                 if (!formData.candidatesFile || !formData.votersFile) {
-                    alert('Please select both candidates and voters CSV files.');
+                    showModal('Missing Files', 'Please select both candidates and voters CSV files.', 'warning');
                     return;
                 }
 
@@ -170,7 +184,7 @@ let OrganizationDashboard = () => {
                 
             } catch (error) {
                 console.error('Error creating election with CSV:', error);
-                alert('Failed to create election. Please check your CSV files and try again.');
+                showModal('Error', 'Failed to create election. Please check your CSV files and try again.', 'error');
             }
         };
 
@@ -537,6 +551,7 @@ let OrganizationDashboard = () => {
                         { id: 'overview', label: 'Overview', icon: Vote },
                         { id: 'elections', label: 'Elections', icon: Vote },
                         { id: 'candidates', label: 'Candidates', icon: Users },
+                        { id: 'admins', label: 'Admins', icon: Shield },
                         { id: 'notifications', label: 'Notifications', icon: Bell },
                     ].map((tab) => {
                         const Icon = tab.icon;
@@ -570,6 +585,13 @@ let OrganizationDashboard = () => {
                    </div>
                 )}
 
+                {activeTab === 'admins' && (
+                   <div className="space-y-6">
+                     <h2 className="text-2xl font-bold text-gray-900">Organization Admins</h2>
+                     <OrganizationAdminsTab />
+                   </div>
+                )}
+
                 {activeTab === 'notifications' && (
                    <div className="space-y-6">
                      <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
@@ -580,6 +602,18 @@ let OrganizationDashboard = () => {
 
 
                 {showCreateElection && <CreateElectionModal />}
+                
+                {/* Modal for notifications */}
+                <Modal
+                    isOpen={modalConfig.isOpen}
+                    onClose={closeModal}
+                    title={modalConfig.title}
+                    type={modalConfig.type}
+                >
+                    <div className="text-center">
+                        <p className="text-sm text-gray-600">{modalConfig.message}</p>
+                    </div>
+                </Modal>
             </div>
         </div>
     );

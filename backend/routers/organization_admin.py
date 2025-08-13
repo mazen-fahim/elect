@@ -21,22 +21,30 @@ router = APIRouter(prefix="/organization-admins", tags=["Organization Admins"])
 class OrganizationAdminCreate(BaseModel):
     email: EmailStr
     password: str
+    first_name: str
+    last_name: str
 
 
 class OrganizationAdminRead(BaseModel):
     user_id: int
     email: EmailStr
+    first_name: str
+    last_name: str
     created_at: datetime
 
 
 class OrganizationAdminSelfUpdate(BaseModel):
     email: EmailStr | None = None
     password: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
 
 
 class OrganizationAdminSelfUpdateResponse(BaseModel):
     user_id: int
     email: EmailStr
+    first_name: str
+    last_name: str
 
 
 @router.get("/", response_model=List[OrganizationAdminRead])
@@ -55,7 +63,7 @@ async def list_org_admins(db: db_dependency, current_org_user: organization_depe
     for a in admins:
         ures = await db.execute(select(User).where(User.id == a.user_id))
         u = ures.scalar_one()
-        admin_users.append(OrganizationAdminRead(user_id=u.id, email=u.email, created_at=a.created_at))
+        admin_users.append(OrganizationAdminRead(user_id=u.id, email=u.email, first_name=u.first_name, last_name=u.last_name, created_at=a.created_at))
     return admin_users
 
 
@@ -85,6 +93,8 @@ async def create_org_admin(
     new_user = User(
         email=str(payload.email),
         password=password_hash,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
         role=UserRole.organization_admin,
         created_at=datetime.now(timezone.utc),
         last_access_at=datetime.now(timezone.utc),
@@ -100,7 +110,7 @@ async def create_org_admin(
     )
     db.add(org_admin)
     await db.commit()
-    return OrganizationAdminRead(user_id=new_user.id, email=new_user.email, created_at=org_admin.created_at)
+    return OrganizationAdminRead(user_id=new_user.id, email=new_user.email, first_name=new_user.first_name, last_name=new_user.last_name, created_at=org_admin.created_at)
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -149,6 +159,16 @@ async def update_self(
 
     changes: list[str] = []
 
+    # Update first_name if provided
+    if payload.first_name and payload.first_name != user.first_name:
+        user.first_name = payload.first_name
+        changes.append("first_name")
+
+    # Update last_name if provided
+    if payload.last_name and payload.last_name != user.last_name:
+        user.last_name = payload.last_name
+        changes.append("last_name")
+
     # Update email if provided and unique
     if payload.email and payload.email != user.email:
         existing = await db.execute(select(User).where(User.email == str(payload.email)))
@@ -185,7 +205,7 @@ async def update_self(
             # Do not block the update on notification errors
             pass
 
-    return OrganizationAdminSelfUpdateResponse(user_id=user.id, email=user.email)
+    return OrganizationAdminSelfUpdateResponse(user_id=user.id, email=user.email, first_name=user.first_name, last_name=user.last_name)
 
 
 @router.put("/{user_id}", response_model=OrganizationAdminSelfUpdateResponse)
@@ -217,6 +237,12 @@ async def update_org_admin(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Apply updates
+    if payload.first_name and payload.first_name != user.first_name:
+        user.first_name = payload.first_name
+
+    if payload.last_name and payload.last_name != user.last_name:
+        user.last_name = payload.last_name
+
     if payload.email and payload.email != user.email:
         existing = await db.execute(select(User).where(User.email == str(payload.email)))
         if existing.scalars().first():
@@ -229,4 +255,4 @@ async def update_org_admin(
 
     await db.commit()
 
-    return OrganizationAdminSelfUpdateResponse(user_id=user.id, email=user.email)
+    return OrganizationAdminSelfUpdateResponse(user_id=user.id, email=user.email, first_name=user.first_name, last_name=user.last_name)
