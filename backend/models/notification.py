@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
@@ -132,7 +132,7 @@ class Notification(Base):
     
     # Metadata
     is_read = Column(Boolean, default=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc), index=True)
     read_at = Column(DateTime, nullable=True)
     
     # Additional data (JSON-like string for flexible data storage)
@@ -156,9 +156,9 @@ class Notification(Base):
     @property
     def age_hours(self) -> float:
         """Returns the age of the notification in hours."""
-        return (datetime.utcnow() - self.created_at).total_seconds() / 3600
+        return (datetime.now(timezone.utc) - self.created_at).total_seconds() / 3600
 
     def mark_as_read(self):
         """Mark the notification as read."""
         self.is_read = True
-        self.read_at = datetime.utcnow()
+        self.read_at = datetime.now(timezone.utc)

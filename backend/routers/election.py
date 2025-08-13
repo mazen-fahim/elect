@@ -254,6 +254,13 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
     if voters_count > 0:
         new_election.potential_number_of_voters = voters_count
 
+    # Store values before commit to avoid expired ORM object issues
+    election_id = new_election.id
+    election_title = new_election.title
+    election_starts_at = new_election.starts_at
+    election_ends_at = new_election.ends_at
+    election_created_at = new_election.created_at
+
     await db.commit()
     await db.refresh(new_election)
 
@@ -275,10 +282,10 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
     # Create notification for election creation
     notification_service = NotificationService(db)
     election_notification_data = ElectionNotificationData(
-        election_id=new_election.id,
-        election_title=new_election.title,
-        start_time=new_election.starts_at,
-        end_time=new_election.ends_at,
+        election_id=election_id,
+        election_title=election_title,
+        start_time=election_starts_at,
+        end_time=election_ends_at,
     )
     await notification_service.create_election_created_notification(
         organization_id=organization_id, election_data=election_notification_data
@@ -409,7 +416,13 @@ async def delete_election(election_id: int, db: db_dependency, current_user: org
         for notification in notifications:
             await db.delete(notification)
 
-        # 5. Create notification before deleting the election
+        # 6. Finally delete the election itself
+        await db.delete(election)
+
+        # Commit all deletions first
+        await db.commit()
+
+        # 7. Create notification after successful deletion (in a separate transaction)
         try:
             notification_service = NotificationService(db)
             await notification_service.create_election_deleted_notification(
@@ -419,12 +432,7 @@ async def delete_election(election_id: int, db: db_dependency, current_user: org
             )
         except Exception as notification_error:
             print(f"Warning: Failed to create deletion notification: {notification_error}")
-
-        # 6. Finally delete the election itself
-        await db.delete(election)
-
-        # Commit all deletions and the notification
-        await db.commit()
+            # Don't fail the deletion if notification creation fails
 
     except Exception as e:
         await db.rollback()
@@ -708,16 +716,22 @@ async def create_election_with_csv(
         new_election.number_of_candidates = candidates_count
         new_election.potential_number_of_voters = voters_count
 
+        # Store values before commit to avoid expired ORM object issues
+        election_id = new_election.id
+        election_title = new_election.title
+        election_starts_at = new_election.starts_at
+        election_ends_at = new_election.ends_at
+
         await db.commit()
         await db.refresh(new_election)
 
         # Create notification for election creation
         notification_service = NotificationService(db)
         election_notification_data = ElectionNotificationData(
-            election_id=new_election.id,
-            election_title=new_election.title,
-            start_time=new_election.starts_at,
-            end_time=new_election.ends_at,
+            election_id=election_id,
+            election_title=election_title,
+            start_time=election_starts_at,
+            end_time=election_ends_at,
         )
         await notification_service.create_election_created_notification(
             organization_id=organization_id, election_data=election_notification_data
