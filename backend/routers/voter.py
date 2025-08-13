@@ -66,7 +66,7 @@ async def create_voter(voter_data: VoterCreate, db: db_dependency):
     await db.commit()
     await db.refresh(new_voter)
 
-    # Include election title in response
+    # Include election title in response (after refresh to avoid expired ORM issues)
     voter_out = new_voter
     voter_out.election_title = new_voter.election.title
     return voter_out
@@ -135,6 +135,7 @@ async def update_voter(voter_id: str, election_id: int, voter_data: VoterUpdate,
 
     await db.commit()
     await db.refresh(voter)
+    # Set election title after refresh to avoid expired ORM issues
     voter.election_title = voter.election.title
     return voter
 
