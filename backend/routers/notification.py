@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, status, Query, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +10,7 @@ from core.dependencies import db_dependency, organization_dependency
 from models.notification import Notification, NotificationType, NotificationPriority
 from models.election import Election
 from models.candidate import Candidate
+from models.user import UserRole
 from schemas.notification import (
     NotificationRead, 
     NotificationUpdate, 
@@ -36,74 +37,117 @@ async def get_notifications(
 ):
     """Get notifications for the current organization with filtering options"""
     
-    # Build query conditions
-    conditions = [Notification.organization_id == current_user.id]
-    
-    if is_read is not None:
-        conditions.append(Notification.is_read == is_read)
-    
-    if notification_type is not None:
-        conditions.append(Notification.type == notification_type)
-    
-    if priority is not None:
-        conditions.append(Notification.priority == priority)
-    
-    if election_id is not None:
-        conditions.append(Notification.election_id == election_id)
-    
-    if days_ago is not None:
-        cutoff_date = datetime.utcnow() - timedelta(days=days_ago)
-        conditions.append(Notification.created_at >= cutoff_date)
-    
-    # Execute query
-    query = (
-        select(Notification)
-        .where(and_(*conditions))
-        .options(selectinload(Notification.election))
-        .order_by(desc(Notification.created_at))
-        .offset(offset)
-        .limit(limit)
-    )
-    
-    result = await db.execute(query)
-    notifications = result.scalars().all()
-    
-    # Enhance notifications with additional data
-    enhanced_notifications = []
-    for notification in notifications:
-        notification_dict = {
-            "id": notification.id,
-            "organization_id": notification.organization_id,
-            "type": notification.type,
-            "priority": notification.priority,
-            "title": notification.title,
-            "message": notification.message,
-            "election_id": notification.election_id,
-            "candidate_id": notification.candidate_id,
-            "voter_id": notification.voter_id,
-            "additional_data": notification.additional_data,
-            "is_read": notification.is_read,
-            "created_at": notification.created_at,
-            "read_at": notification.read_at,
-            "age_hours": notification.age_hours,
-            "is_urgent": notification.is_urgent,
-            "is_election_related": notification.is_election_related,
-            "election_title": notification.election.title if notification.election else None,
-            "candidate_name": None  # Will be populated below if needed
-        }
+    try:
+        # Get the correct organization ID for the current user
+        organization_id = current_user.id
         
-        # Get candidate name if candidate_id is present
-        if notification.candidate_id:
-            candidate_result = await db.execute(
-                select(Candidate).where(Candidate.hashed_national_id == notification.candidate_id)
+        # If user is an organization admin, we need to get their organization ID
+        if current_user.role == UserRole.organization_admin:
+            from models.organization_admin import OrganizationAdmin
+            result = await db.execute(
+                select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
             )
-            candidate = candidate_result.scalar_one_or_none()
-            if candidate:
-                notification_dict["candidate_name"] = candidate.name
+            mapping = result.scalar_one_or_none()
+            if mapping:
+                organization_id = mapping.organization_user_id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Organization admin not linked to any organization"
+                )
         
-        enhanced_notifications.append(NotificationRead(**notification_dict))
-    
-    return enhanced_notifications
+        # Build query conditions
+        conditions = [Notification.organization_id == organization_id]
+        
+        if is_read is not None:
+            conditions.append(Notification.is_read == is_read)
+        
+        if notification_type is not None:
+            conditions.append(Notification.type == notification_type)
+        
+        if priority is not None:
+            conditions.append(Notification.priority == priority)
+        
+        if election_id is not None:
+            conditions.append(Notification.election_id == election_id)
+        
+        if days_ago is not None:
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_ago)
+            conditions.append(Notification.created_at >= cutoff_date)
+        
+        # Execute query - don't use selectinload for election to avoid broken relationship issues
+        query = (
+            select(Notification)
+            .where(and_(*conditions))
+            .order_by(desc(Notification.created_at))
+            .offset(offset)
+            .limit(limit)
+        )
+        
+        result = await db.execute(query)
+        notifications = result.scalars().all()
+        
+        # Enhance notifications with additional data
+        enhanced_notifications = []
+        for notification in notifications:
+            # Get candidate name if candidate_id is present
+            candidate_name = None
+            if notification.candidate_id:
+                candidate_result = await db.execute(
+                    select(Candidate).where(Candidate.hashed_national_id == notification.candidate_id)
+                )
+                candidate = candidate_result.scalar_one_or_none()
+                if candidate:
+                    candidate_name = candidate.name
+            
+            # Safely get election title - handle case where election might have been deleted
+            election_title = None
+            if notification.election_id:
+                try:
+                    election_result = await db.execute(
+                        select(Election).where(Election.id == notification.election_id)
+                    )
+                    election = election_result.scalar_one_or_none()
+                    if election:
+                        election_title = election.title
+                except Exception:
+                    # If there's an issue accessing election, set to None
+                    election_title = None
+            
+            notification_dict = {
+                "id": notification.id,
+                "organization_id": notification.organization_id,
+                "type": notification.type,
+                "priority": notification.priority,
+                "title": notification.title,
+                "message": notification.message,
+                "election_id": notification.election_id,
+                "candidate_id": notification.candidate_id,
+                "voter_id": notification.voter_id,
+                "additional_data": notification.additional_data,
+                "is_read": notification.is_read,
+                "created_at": notification.created_at,
+                "read_at": notification.read_at,
+                "age_hours": notification.age_hours,
+                "is_urgent": notification.is_urgent,
+                "is_election_related": notification.is_election_related,
+                "election_title": election_title,
+                "candidate_name": candidate_name
+            }
+            
+            enhanced_notifications.append(NotificationRead(**notification_dict))
+        
+        return enhanced_notifications
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_notifications: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load notifications: {str(e)}"
+        )
 
 
 @router.get("/summary", response_model=NotificationSummary)
@@ -113,10 +157,39 @@ async def get_notifications_summary(
 ):
     """Get summary statistics for notifications"""
     
-    notification_service = NotificationService(db)
-    summary_data = await notification_service.get_notifications_summary(current_user.id)
-    
-    return NotificationSummary(**summary_data)
+    try:
+        # Get the correct organization ID for the current user
+        organization_id = current_user.id
+        
+        # If user is an organization admin, we need to get their organization ID
+        if current_user.role == UserRole.organization_admin:
+            from models.organization_admin import OrganizationAdmin
+            result = await db.execute(
+                select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
+            )
+            mapping = result.scalar_one_or_none()
+            if mapping:
+                organization_id = mapping.organization_user_id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Organization admin not linked to any organization"
+                )
+        
+        notification_service = NotificationService(db)
+        summary_data = await notification_service.get_notifications_summary(organization_id)
+        
+        return NotificationSummary(**summary_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_notifications_summary: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load notification summary: {str(e)}"
+        )
 
 
 @router.get("/{notification_id}", response_model=NotificationRead)
@@ -127,54 +200,94 @@ async def get_notification(
 ):
     """Get a specific notification by ID"""
     
-    result = await db.execute(
-        select(Notification)
-        .where(
-            Notification.id == notification_id,
-            Notification.organization_id == current_user.id
+    try:
+        # Get the correct organization ID for the current user
+        organization_id = current_user.id
+        
+        # If user is an organization admin, we need to get their organization ID
+        if current_user.role == UserRole.organization_admin:
+            from models.organization_admin import OrganizationAdmin
+            result = await db.execute(
+                select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
+            )
+            mapping = result.scalar_one_or_none()
+            if mapping:
+                organization_id = mapping.organization_user_id
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Organization admin not linked to any organization"
+                )
+        
+        result = await db.execute(
+            select(Notification)
+            .where(
+                Notification.id == notification_id,
+                Notification.organization_id == organization_id
+            )
         )
-        .options(selectinload(Notification.election))
-    )
-    notification = result.scalar_one_or_none()
-    
-    if not notification:
+        notification = result.scalar_one_or_none()
+        
+        if not notification:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Notification not found"
+            )
+        
+        # Get candidate name if candidate_id is present
+        candidate_name = None
+        if notification.candidate_id:
+            candidate_result = await db.execute(
+                select(Candidate).where(Candidate.hashed_national_id == notification.candidate_id)
+            )
+            candidate = candidate_result.scalar_one_or_none()
+            if candidate:
+                candidate_name = candidate.name
+        
+        # Safely get election title - handle case where election might have been deleted
+        election_title = None
+        if notification.election_id:
+            try:
+                election_result = await db.execute(
+                    select(Election).where(Election.id == notification.election_id)
+                )
+                election = election_result.scalar_one_or_none()
+                if election:
+                    election_title = election.title
+            except Exception:
+                # If there's an issue accessing election, set to None
+                election_title = None
+        
+        notification_data = {
+            "id": notification.id,
+            "organization_id": notification.organization_id,
+            "type": notification.type,
+            "priority": notification.priority,
+            "title": notification.title,
+            "message": notification.message,
+            "election_id": notification.election_id,
+            "candidate_id": notification.candidate_id,
+            "voter_id": notification.voter_id,
+            "metadata": notification.metadata,
+            "is_read": notification.is_read,
+            "created_at": notification.created_at,
+            "read_at": notification.read_at,
+            "age_hours": notification.age_hours,
+            "is_urgent": notification.is_urgent,
+            "is_election_related": notification.is_election_related,
+            "election_title": election_title,
+            "candidate_name": candidate_name
+        }
+        
+        return NotificationRead(**notification_data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_notification: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Notification not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load notification: {str(e)}"
         )
-    
-    # Get candidate name if candidate_id is present
-    candidate_name = None
-    if notification.candidate_id:
-        candidate_result = await db.execute(
-            select(Candidate).where(Candidate.hashed_national_id == notification.candidate_id)
-        )
-        candidate = candidate_result.scalar_one_or_none()
-        if candidate:
-            candidate_name = candidate.name
-    
-    notification_data = {
-        "id": notification.id,
-        "organization_id": notification.organization_id,
-        "type": notification.type,
-        "priority": notification.priority,
-        "title": notification.title,
-        "message": notification.message,
-        "election_id": notification.election_id,
-        "candidate_id": notification.candidate_id,
-        "voter_id": notification.voter_id,
-        "metadata": notification.metadata,
-        "is_read": notification.is_read,
-        "created_at": notification.created_at,
-        "read_at": notification.read_at,
-        "age_hours": notification.age_hours,
-        "is_urgent": notification.is_urgent,
-        "is_election_related": notification.is_election_related,
-        "election_title": notification.election.title if notification.election else None,
-        "candidate_name": candidate_name
-    }
-    
-    return NotificationRead(**notification_data)
 
 
 @router.patch("/{notification_id}", response_model=NotificationRead)
@@ -192,7 +305,6 @@ async def update_notification(
             Notification.id == notification_id,
             Notification.organization_id == current_user.id
         )
-        .options(selectinload(Notification.election))
     )
     notification = result.scalar_one_or_none()
     
@@ -208,13 +320,27 @@ async def update_notification(
         if field == "is_read" and value and not notification.is_read:
             # Mark as read
             notification.is_read = True
-            notification.read_at = datetime.utcnow()
+            notification.read_at = datetime.now(timezone.utc)
         elif field == "is_read" and not value and notification.is_read:
             # Mark as unread
             notification.is_read = False
             notification.read_at = None
         else:
             setattr(notification, field, value)
+    
+    # Store values before commit to avoid expired ORM object issues
+    election_title = None
+    if notification.election_id:
+        try:
+            election_result = await db.execute(
+                select(Election).where(Election.id == notification.election_id)
+            )
+            election = election_result.scalar_one_or_none()
+            if election:
+                election_title = election.title
+        except Exception:
+            # If there's an issue accessing election, set to None
+            election_title = None
     
     await db.commit()
     await db.refresh(notification)
@@ -246,7 +372,7 @@ async def update_notification(
         "age_hours": notification.age_hours,
         "is_urgent": notification.is_urgent,
         "is_election_related": notification.is_election_related,
-        "election_title": notification.election.title if notification.election else None,
+        "election_title": election_title,
         "candidate_name": candidate_name
     }
     
@@ -304,10 +430,69 @@ async def delete_notification(
     return {"message": "Notification deleted successfully"}
 
 
+@router.get("/test", response_model=dict)
+async def test_notification_endpoint():
+    """Test endpoint to check if notifications are working"""
+    try:
+        return {"status": "success", "message": "Notification endpoint is working"}
+    except Exception as e:
+        print(f"Error in test endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Test endpoint failed: {str(e)}"
+        )
+
+@router.get("/debug", response_model=dict)
+async def debug_notification_endpoint(
+    db: db_dependency,
+    current_user: organization_dependency
+):
+    """Debug endpoint to check dependencies and basic functionality"""
+    try:
+        # Test basic dependency resolution
+        user_info = {
+            "id": current_user.id,
+            "role": current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role),
+            "email": getattr(current_user, 'email', 'N/A')
+        }
+        
+        # Test database connection
+        db_test = "Database connection OK"
+        try:
+            await db.execute("SELECT 1")
+        except Exception as db_error:
+            db_test = f"Database error: {str(db_error)}"
+        
+        return {
+            "status": "success", 
+            "message": "Debug endpoint working",
+            "user_info": user_info,
+            "database_test": db_test
+        }
+    except Exception as e:
+        print(f"Error in debug endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Debug endpoint failed: {str(e)}"
+        )
+
 @router.get("/types/available", response_model=List[str])
-async def get_available_notification_types():
+async def get_notifications_types():
     """Get list of available notification types"""
-    return [notification_type.value for notification_type in NotificationType]
+    try:
+        return [notification_type.value for notification_type in NotificationType]
+    except Exception as e:
+        print(f"Error getting notification types: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get notification types: {str(e)}"
+        )
 
 
 @router.get("/priorities/available", response_model=List[str])
