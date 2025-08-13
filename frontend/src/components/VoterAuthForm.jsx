@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Shield, Check, AlertCircle } from 'lucide-react';
 import CandidateCard from './CandidateCard';
+import Modal from './Modal';
 
 let VoterAuthForm = ({ election, onClose }) => {
   let { organizations, candidates, castVote } = useApp();
@@ -12,9 +13,19 @@ let VoterAuthForm = ({ election, onClose }) => {
   let [isVerifying, setIsVerifying] = useState(false);
   let [error, setError] = useState('');
   let [voteResult, setVoteResult] = useState(null);
+  let [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
 
   let organization = organizations.find(org => org.id === election.organizationId);
   let electionCandidates = candidates.filter(c => election.candidates.includes(c.id));
+
+  // Helper functions for modal
+  let showModal = (title, message, type = 'info') => {
+    setModalConfig({ isOpen: true, title, message, type });
+  };
+
+  let closeModal = () => {
+    setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
+  };
 
   let handleIdSubmit = async (e) => {
     e.preventDefault();
@@ -26,7 +37,7 @@ let VoterAuthForm = ({ election, onClose }) => {
       if (voterId.length >= 10) { 
         setStep(2);
     
-        alert(`Verification code sent to voter ID: ${voterId}`);
+        showModal('Verification Code Sent', `Verification code sent to voter ID: ${voterId}`, 'success');
       } else {
         setError('Invalid National ID. Please check and try again.');
       }
@@ -255,6 +266,18 @@ let VoterAuthForm = ({ election, onClose }) => {
           {step === 4 && renderConfirmation()}
         </div>
       </div>
+      
+      {/* Modal for notifications */}
+      <Modal
+        isOpen={modalConfig.isOpen}
+        onClose={closeModal}
+        title={modalConfig.title}
+        type={modalConfig.type}
+      >
+        <div className="text-center">
+          <p className="text-sm text-gray-600">{modalConfig.message}</p>
+        </div>
+      </Modal>
     </div>
   );
 };

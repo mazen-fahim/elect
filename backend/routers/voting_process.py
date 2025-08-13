@@ -92,7 +92,7 @@ async def create_voting_process(process_data: VotingProcessCreate, db: db_depend
     await db.commit()
     await db.refresh(new_process)
 
-    # Include election status in response
+    # Get election status from the refreshed object to avoid expired ORM issues
     process_out = VotingProcessOut(
         voter_hashed_national_id=new_process.voter_hashed_national_id,
         election_id=new_process.election_id,

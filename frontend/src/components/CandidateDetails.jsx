@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { X, User, Globe, MapPin, Edit3, Trash2, Calendar, Check, XCircle } from 'lucide-react';
 import { candidateApi, electionApi } from '../services/api';
 import { COUNTRIES } from '../constants/countries.js';
+import Modal from './Modal';
+import ConfirmModal from './ConfirmModal';
 
 const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) => {
   const [editing, setEditing] = useState(false);
@@ -12,6 +14,8 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
   const [elections, setElections] = useState([]);
   const [photoFile, setPhotoFile] = useState(null);
   const [symbolIconFile, setSymbolIconFile] = useState(null);
+  const [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (candidate) {
@@ -50,6 +54,15 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
   }, [candidate, elections]);
 
   if (!isOpen || !candidate) return null;
+
+  // Helper functions for modal
+  const showModal = (title, message, type = 'info') => {
+    setModalConfig({ isOpen: true, title, message, type });
+  };
+
+  const closeModal = () => {
+    setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
+  };
 
   const handleSave = async () => {
     try {
@@ -101,21 +114,24 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
         onUpdated && onUpdated(updated);
       }
     } catch (e) {
-      alert(e?.message || 'Failed to save candidate');
+      showModal('Error', e?.message || 'Failed to save candidate', 'error');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`Delete candidate "${candidate.name}"? This cannot be undone.`)) return;
+    setShowConfirmDelete(true);
+  };
+
+  const confirmDelete = async () => {
     try {
       setDeleting(true);
       await candidateApi.delete(candidate.hashed_national_id);
       onDeleted && onDeleted(candidate);
       onClose();
     } catch (e) {
-      alert(e?.message || 'Failed to delete candidate');
+      showModal('Error', e?.message || 'Failed to delete candidate', 'error');
     } finally {
       setDeleting(false);
     }
@@ -445,6 +461,30 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
           </div>
         )}
       </div>
+      
+      {/* Modal for notifications */}
+      <Modal
+        isOpen={modalConfig.isOpen}
+        onClose={closeModal}
+        title={modalConfig.title}
+        type={modalConfig.type}
+      >
+        <div className="text-center">
+          <p className="text-sm text-gray-600">{modalConfig.message}</p>
+        </div>
+      </Modal>
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal
+        isOpen={showConfirmDelete}
+        onClose={() => setShowConfirmDelete(false)}
+        onConfirm={confirmDelete}
+        title="Delete Candidate"
+        message={`Delete candidate "${candidate.name}"? This cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        type="danger"
+      />
     </div>
   );
 };
@@ -487,7 +527,7 @@ function EditParticipations({ elections, candidate, onCancel, onSaved }){
       const updated = await resp.json();
       onSaved && onSaved(updated);
     } catch (e) {
-      alert(e.message || 'Failed to save participations');
+      showModal('Error', e.message || 'Failed to save participations', 'error');
     } finally {
       setSaving(false);
     }

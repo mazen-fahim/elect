@@ -18,6 +18,8 @@ let OrganizationRegistration = () => {
         email: '',
         password: '',
         confirmPassword: '',
+        first_name: '',
+        last_name: '',
         // Organization fields
         name: '',
         country: '',
@@ -40,7 +42,7 @@ let OrganizationRegistration = () => {
         const urlRegex = /^(https?:\/\/)?([\w\d-]+\.)+\w{2,}(\/.+)?$/;
 
         // Required fields validation
-        if (!formData.name || !formData.email || !formData.password || !formData.country) {
+        if (!formData.name || !formData.email || !formData.password || !formData.first_name || !formData.last_name || !formData.country) {
             setErrorMessage("Please fill in all required fields.");
             return false;
         }
@@ -138,6 +140,36 @@ let OrganizationRegistration = () => {
                             type="email"
                             name="email"
                             value={formData.email}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                        />
+                    </div>
+
+                    {/* First Name - Required */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            First Name *
+                        </label>
+                        <input
+                            type="text"
+                            name="first_name"
+                            value={formData.first_name}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            required
+                        />
+                    </div>
+
+                    {/* Last Name - Required */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Last Name *
+                        </label>
+                        <input
+                            type="text"
+                            name="last_name"
+                            value={formData.last_name}
                             onChange={handleInputChange}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             required
