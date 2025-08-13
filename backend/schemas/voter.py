@@ -19,11 +19,14 @@ class VoterCreate(VoterBase):
 
 class VoterUpdate(BaseModel):
     phone_number: str | None = Field(default=None, min_length=10, max_length=20)
+    # allow toggling by system, but verification itself is OTP flow
+    is_verified: bool | None = None
 
 
 class VoterOut(VoterBase):
     created_at: datetime
     election_title: str
+    is_verified: bool
 
     class Config:
         from_attributes = True

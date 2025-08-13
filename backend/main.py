@@ -9,19 +9,30 @@ from core.error_handler import handle_error
 
 # This needs to be imported before we call create on Base.metadata
 # because it registers the models with SQLAlchemy
-from routers import auth, candidate, election, notification, organization, voter, voting_process
+from routers import (
+    auth,
+    candidate,
+    election,
+    notification,
+    organization,
+    voter,
+    voting_process,
+    organization_admin,
+    approval,
+    home,
+)
 
 # Import all models to ensure they are registered
 from models import (
-    candidate as candidate_model, 
-    candidate_participation, 
-    election as election_model, 
-    notification as notification_model, 
-    organization as organization_model, 
-    user, 
-    verification_token, 
-    voter as voter_model, 
-    voting_process as voting_process_model
+    candidate as candidate_model,
+    candidate_participation,
+    election as election_model,
+    notification as notification_model,
+    organization as organization_model,
+    user,
+    verification_token,
+    voter as voter_model,
+    voting_process as voting_process_model,
 )
 
 
@@ -52,12 +63,15 @@ async def health_check():
 
 api_router = APIRouter(prefix="/api")
 
-api_router.include_router(organization.router)
-api_router.include_router(election.router)
-api_router.include_router(candidate.router)
-api_router.include_router(voter.router)
-api_router.include_router(voting_process.router)
-api_router.include_router(notification.router)
-api_router.include_router(auth.router)
+api_router.include_router(organization)
+api_router.include_router(election)
+api_router.include_router(candidate)
+api_router.include_router(voter)
+api_router.include_router(voting_process)
+api_router.include_router(notification)
+api_router.include_router(auth)
+api_router.include_router(organization_admin)
+api_router.include_router(approval)
+api_router.include_router(home)
 
 app.include_router(api_router)
