@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -459,7 +459,7 @@ class NotificationService:
             "success": success,
             "ip_address": ip_address,
             "user_agent": user_agent,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": "login_attempt"
         }
         
@@ -487,7 +487,7 @@ class NotificationService:
         additional_data_dict = {
             "page_name": page_name,
             "ip_address": ip_address,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": "dashboard_access"
         }
         
@@ -602,7 +602,7 @@ class NotificationService:
             "error_type": error_type,
             "error_message": error_message,
             "context": context,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "action": "system_error"
         }
         
@@ -632,7 +632,7 @@ class NotificationService:
             "feature_name": feature_name,
             "action": action,
             "details": details,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
         return await self.create_notification(
@@ -708,7 +708,7 @@ class NotificationService:
         urgent_count = len(urgent_result.scalars().all())
         
         # Today's notifications
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         today_result = await self.db.execute(
             select(Notification).where(
                 Notification.organization_id == organization_id,

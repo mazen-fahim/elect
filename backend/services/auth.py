@@ -65,54 +65,68 @@ class AuthService:
 
     async def register_organization(self, org_data: RegisterOrganizationRequest) -> Organization:
         try:
-            async with self.db.begin():
-                result = await self.db.execute(select(User).where(User.email == str(org_data.email)))
-                if result.scalars().first():
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.email")
+            # Check for existing email
+            result = await self.db.execute(select(User).where(User.email == str(org_data.email)))
+            if result.scalars().first():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.email")
 
-                result = await self.db.execute(select(Organization).where(Organization.name == org_data.name))
-                if result.scalars().first():
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.name")
+            # Check for existing organization name
+            result = await self.db.execute(select(Organization).where(Organization.name == org_data.name))
+            if result.scalars().first():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.name")
 
-                # Only check API endpoint uniqueness if one is provided
-                if org_data.api_endpoint:
-                    result = await self.db.execute(
-                        select(Organization).where(Organization.api_endpoint == str(org_data.api_endpoint))
-                    )
-                    if result.scalars().first():
-                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.api_endpoint")
-
-                user = User(
-                    email=str(org_data.email),
-                    password=AuthService.get_password_hash(org_data.password),
-                    role="organization",
-                    # Fix: In production make it false and only activate it after email verification.
-                    is_active=True,
-                    created_at=datetime.now(UTC),
-                    last_access_at=datetime.now(UTC),
+            # Only check API endpoint uniqueness if one is provided
+            if org_data.api_endpoint:
+                result = await self.db.execute(
+                    select(Organization).where(Organization.api_endpoint == str(org_data.api_endpoint))
                 )
-                self.db.add(user)
-                await self.db.flush()
+                if result.scalars().first():
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.api_endpoint")
 
-                org = Organization(
-                    name=org_data.name,
-                    status="pending",
-                    api_endpoint=str(org_data.api_endpoint) if org_data.api_endpoint else None,
-                    country=org_data.country,
-                    address=org_data.address,
-                    description=org_data.description,
-                    user_id=user.id,
-                )
+            # Create user
+            user = User(
+                email=str(org_data.email),
+                password=AuthService.get_password_hash(org_data.password),
+                first_name=org_data.first_name,
+                last_name=org_data.last_name,
+                role=UserRole.organization,
+                # Fix: In production make it false and only activate it after email verification.
+                is_active=True,
+                created_at=datetime.now(UTC),
+                last_access_at=datetime.now(UTC),
+            )
+            self.db.add(user)
+            await self.db.flush()
 
-                self.db.add(org)
-                await self.db.flush()
+            # Create organization
+            org = Organization(
+                name=org_data.name,
+                status="pending",
+                api_endpoint=str(org_data.api_endpoint) if org_data.api_endpoint else None,
+                country=org_data.country,
+                address=org_data.address,
+                description=org_data.description,
+                user_id=user.id,
+            )
 
+            self.db.add(org)
+            await self.db.flush()
+
+            # Commit the transaction
+            await self.db.commit()
+            
+            # Refresh the organization object
             await self.db.refresh(org, attribute_names=["user"])
             return org
 
-        except IntegrityError:
+        except IntegrityError as e:
             await self.db.rollback()
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error with database transaction")  # noqa: B904
+            print(f"Database integrity error: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error with database transaction")
+        except Exception as e:
+            await self.db.rollback()
+            print(f"Unexpected error during registration: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error with database transaction")
 
     def is_admin(self, user: User) -> bool:
         return user.role == UserRole.admin

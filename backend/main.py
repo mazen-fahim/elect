@@ -7,32 +7,20 @@ from fastapi_limiter import FastAPILimiter
 
 from core.error_handler import handle_error
 
+# Import all models to ensure they are registered
 # This needs to be imported before we call create on Base.metadata
 # because it registers the models with SQLAlchemy
 from routers import (
+    approval,
     auth,
     candidate,
     election,
+    home,
     notification,
     organization,
+    organization_admin,
     voter,
     voting_process,
-    organization_admin,
-    approval,
-    home,
-)
-
-# Import all models to ensure they are registered
-from models import (
-    candidate as candidate_model,
-    candidate_participation,
-    election as election_model,
-    notification as notification_model,
-    organization as organization_model,
-    user,
-    verification_token,
-    voter as voter_model,
-    voting_process as voting_process_model,
 )
 
 
