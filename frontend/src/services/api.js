@@ -10,7 +10,7 @@ class ApiError extends Error {
 
 const apiRequest = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   const config = {
     headers: {
       'Content-Type': 'application/json',
@@ -27,13 +27,13 @@ const apiRequest = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(url, config);
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      
+
       // Convert backend error codes to user-friendly messages
       let errorMessage = errorData.detail || errorData.error_message || `HTTP ${response.status}: ${response.statusText}`;
-      
+
       if (response.status === 401) {
         if (errorData.error_message === 'Invalid Credentials') {
           errorMessage = 'Invalid email or password. Please check your credentials and try again.';
@@ -51,7 +51,7 @@ const apiRequest = async (endpoint, options = {}) => {
       } else if (response.status >= 500) {
         errorMessage = 'Server error. Please try again later.';
       }
-      
+
       throw new ApiError(
         errorMessage,
         response.status,
@@ -128,7 +128,7 @@ const electionApi = {
   createWithCsv: async (formData) => {
     // For file uploads, don't set Content-Type header, let browser set it
     const url = `${API_BASE_URL}/election/create-with-csv`;
-    
+
     const config = {
       method: 'POST',
       body: formData, // FormData object
@@ -144,13 +144,13 @@ const electionApi = {
 
     try {
       const response = await fetch(url, config);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        
+
         // Convert backend error codes to user-friendly messages
         let errorMessage = errorData.detail || errorData.error_message || `HTTP ${response.status}: ${response.statusText}`;
-        
+
         if (response.status === 401) {
           errorMessage = 'Authentication failed. Please log in again.';
         } else if (response.status === 400) {
@@ -159,7 +159,7 @@ const electionApi = {
         } else if (response.status >= 500) {
           errorMessage = 'Server error. Please try again later.';
         }
-        
+
         throw new ApiError(
           errorMessage,
           response.status,
@@ -294,6 +294,53 @@ const notificationApi = {
   },
 };
 
+// System Admin endpoints (admin-only)
+const systemAdminApi = {
+  listActiveElections: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString ? `/SystemAdmin/elections/active?${queryString}` : '/SystemAdmin/elections/active';
+    return apiRequest(endpoint);
+  },
+
+  getElectionDetails: async (electionId) => {
+    return apiRequest(`/SystemAdmin/elections/${electionId}/details`);
+  },
+
+  listOrganizations: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString ? `/SystemAdmin/organizations?${queryString}` : '/SystemAdmin/organizations';
+    return apiRequest(endpoint);
+  },
+
+  getOrgElectionsGrouped: async (organizationUserId) => {
+    return apiRequest(`/SystemAdmin/organizations/${organizationUserId}/elections-grouped`);
+  },
+
+  deleteOrganization: async (organizationUserId) => {
+    return apiRequest(`/SystemAdmin/organizations/${organizationUserId}`, { method: 'DELETE' });
+  },
+
+  organizationsActivity: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString
+      ? `/SystemAdmin/notifications/organizations?${queryString}`
+      : '/SystemAdmin/notifications/organizations';
+    return apiRequest(endpoint);
+  },
+};
+
 // Default export for easier importing
 const api = {
   get: (endpoint) => apiRequest(endpoint),
@@ -314,8 +361,9 @@ const api = {
   election: electionApi,
   candidate: candidateApi,
   notification: notificationApi,
+  systemAdmin: systemAdminApi,
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi };
 
