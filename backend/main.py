@@ -17,6 +17,7 @@ from routers import (
     election,
     home,
     notification,
+    system_admin,
     organization,
     organization_admin,
     voter,
@@ -57,6 +58,7 @@ api_router.include_router(candidate)
 api_router.include_router(voter)
 api_router.include_router(voting_process)
 api_router.include_router(notification)
+api_router.include_router(system_admin)
 api_router.include_router(auth)
 api_router.include_router(organization_admin)
 api_router.include_router(approval)
