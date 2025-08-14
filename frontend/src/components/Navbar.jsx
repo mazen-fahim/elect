@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation , useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Vote, Home, Users, LogIn, UserPlus, Shield, User } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import OrganizationProfileModal from './OrganizationProfileModal';
@@ -17,8 +17,8 @@ let Navbar = () => {
     };
 
     let handleLogout = () => {
-        logout();         
-        navigate('/');   
+        logout();
+        navigate('/');
     };
 
     return (
@@ -62,8 +62,8 @@ let Navbar = () => {
                         )}
                         {user?.role === 'admin' && (
                             <Link
-                                to="/admin"
-                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/admin')}`}
+                                to="/SystemAdmin"
+                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/SystemAdmin')}`}
                             >
                                 <Shield className="h-4 w-4" />
                                 <span>Admin</span>
@@ -78,34 +78,34 @@ let Navbar = () => {
                                 <span className="text-sm text-gray-600">Loading...</span>
                             </div>
                         ) : user ? (
-                                                <div className="flex items-center space-x-3">
-                        <span className="text-sm font-medium text-gray-700">
-                            Welcome, {user.role === 'organization' ? user.organizationName || user.name || 'Organization' : user.name || 'User'}
-                        </span>
-                        {user.role === 'organization' && (
-                            <>
-                                <Link
-                                    to={`/org/${user.organizationId}/dashboard`}
-                                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-md hover:shadow-lg"
-                                >
-                                    Dashboard
-                                </Link>
+                            <div className="flex items-center space-x-3">
+                                <span className="text-sm font-medium text-gray-700">
+                                    Welcome, {user.role === 'organization' ? user.organizationName || user.name || 'Organization' : user.name || 'User'}
+                                </span>
+                                {user.role === 'organization' && (
+                                    <>
+                                        <Link
+                                            to={`/org/${user.organizationId}/dashboard`}
+                                            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                                        >
+                                            Dashboard
+                                        </Link>
+                                        <button
+                                            onClick={() => setShowProfileModal(true)}
+                                            className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                                            title="Organization Profile"
+                                        >
+                                            <User className="h-5 w-5" />
+                                        </button>
+                                    </>
+                                )}
                                 <button
-                                    onClick={() => setShowProfileModal(true)}
-                                    className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200"
-                                    title="Organization Profile"
+                                    onClick={handleLogout}
+                                    className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors duration-200"
                                 >
-                                    <User className="h-5 w-5" />
+                                    Logout
                                 </button>
-                            </>
-                        )}
-                        <button
-                            onClick={handleLogout}
-                            className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors duration-200"
-                        >
-                            Logout
-                        </button>
-                    </div>
+                            </div>
                         ) : (
                             <div className="flex items-center space-x-2">
                                 <Link
@@ -127,7 +127,7 @@ let Navbar = () => {
                     </div>
                 </div>
             </div>
-            
+
             {/* Organization Profile Modal */}
             {user?.role === 'organization' && (
                 <OrganizationProfileModal

@@ -20,12 +20,13 @@ function App() {
                 <Routes>
                     <Route path="/" element={<Home />} />
                     <Route path="/admin" element={<AdminDashboard />} />
+                    <Route path="/SystemAdmin" element={<AdminDashboard />} />
                     <Route path="/org/:id/dashboard" element={<OrganizationDashboard />} />
                     <Route path="/login/org" element={<OrganizationLogin />} />
-                     <Route path="/register" element={<OrganizationRegistration />} />
+                    <Route path="/register" element={<OrganizationRegistration />} />
                     <Route path="/elections" element={<VoterExperience />} />
                     <Route path="/results/:electionId" element={<ElectionResults />} />
-                
+
                 </Routes>
             </div>
         </AppProvider>

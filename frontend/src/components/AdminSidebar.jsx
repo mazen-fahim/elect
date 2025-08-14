@@ -4,8 +4,9 @@ import { BarChart3, Users, Vote, Settings, Shield } from 'lucide-react';
 let AdminSidebar = ({ activeTab, setActiveTab }) => {
     let menuItems = [
         { id: 'overview', label: 'Overview', icon: BarChart3 },
+        { id: 'home', label: 'Home', icon: Vote },
         { id: 'organizations', label: 'Organizations', icon: Users },
-        { id: 'elections', label: 'Elections', icon: Vote },
+        { id: 'notifications', label: 'Notifications', icon: Settings },
         { id: 'settings', label: 'Settings', icon: Settings },
     ];
 
@@ -29,11 +30,10 @@ let AdminSidebar = ({ activeTab, setActiveTab }) => {
                             <li key={item.id}>
                                 <button
                                     onClick={() => setActiveTab(item.id)}
-                                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${
-                                        activeTab === item.id
+                                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors duration-200 ${activeTab === item.id
                                             ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                             : 'text-gray-700 hover:bg-gray-100'
-                                    }`}
+                                        }`}
                                 >
                                     <Icon className="h-5 w-5" />
                                     <span className="font-medium">{item.label}</span>
