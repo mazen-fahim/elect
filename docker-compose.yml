@@ -5,6 +5,7 @@ services:
     build: ./backend
     volumes:
       - ./backend:/app
+      - ./ai/models:/ai/models
     ports:
       - "8000:8000"
     depends_on:
@@ -53,6 +54,7 @@ services:
     depends_on:
       - frontend
       - backend
+     
 
   redis:
     image: redis:alpine

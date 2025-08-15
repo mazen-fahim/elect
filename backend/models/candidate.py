@@ -1,11 +1,13 @@
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING , List
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from .candidate_voter_mapping import CandidateVoterMapping
+from core.shared import Country, Status
+
 from core.base import Base
-from core.shared import Country
 
 if TYPE_CHECKING:
     from .candidate_participation import CandidateParticipation
@@ -42,4 +44,8 @@ class Candidate(Base):
         "CandidateParticipation",
         back_populates="candidate",
         cascade="all, delete-orphan",
+    )
+
+    voter_mappings: Mapped[List["CandidateVoterMapping"]] = relationship(
+        "CandidateVoterMapping", back_populates="candidate", cascade="all, delete-orphan"
     )

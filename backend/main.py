@@ -10,6 +10,8 @@ from core.error_handler import handle_error
 # Import all models to ensure they are registered
 # This needs to be imported before we call create on Base.metadata
 # because it registers the models with SQLAlchemy
+
+app = FastAPI()
 from routers import (
     approval,
     auth,
@@ -22,6 +24,8 @@ from routers import (
     organization_admin,
     voter,
     voting_process,
+    statistics , 
+    prediction ,
 )
 
 
@@ -50,6 +54,7 @@ async def health_check():
     return {"status": "Healthy"}
 
 
+
 api_router = APIRouter(prefix="/api")
 
 api_router.include_router(organization)
@@ -63,5 +68,12 @@ api_router.include_router(auth)
 api_router.include_router(organization_admin)
 api_router.include_router(approval)
 api_router.include_router(home)
+api_router.include_router(statistics.router)
+api_router.include_router(prediction.router)
+
 
 app.include_router(api_router)
+
+
+
+
