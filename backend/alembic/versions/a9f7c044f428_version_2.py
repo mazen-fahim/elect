@@ -1,8 +1,8 @@
-"""Initalize Models
+"""version 2
 
-Revision ID: 5cf9988d6340
+Revision ID: a9f7c044f428
 Revises: 
-Create Date: 2025-08-05 16:40:11.657366
+Create Date: 2025-08-13 18:48:50.695778
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '5cf9988d6340'
+revision: str = 'a9f7c044f428'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -36,32 +36,51 @@ def upgrade() -> None:
     op.create_table('organizations',
     sa.Column('name', sa.String(length=200), nullable=False),
     sa.Column('status', sa.Enum('pending', 'accepted', 'rejected', name='status'), nullable=False),
-    sa.Column('payment_status', sa.Enum('pending', 'accepted', 'rejected', name='status'), nullable=False),
     sa.Column('api_endpoint', sa.String(length=200), nullable=True),
     sa.Column('country', sa.Enum('Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia_and_Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina_Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape_Verde', 'Central_African_Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa_Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech_Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican_Republic', 'East_Timor', 'Ecuador', 'Egypt', 'El_Salvador', 'Equatorial_Guinea', 'Eritrea', 'Estonia', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea_Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Ivory_Coast', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Korea_North', 'Korea_South', 'Kosovo', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macedonia', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall_Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New_Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama', 'Papua_New_Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint_Kitts_and_Nevis', 'Saint_Lucia', 'Saint_Vincent_and_the_Grenadines', 'Samoa', 'San_Marino', 'Sao_Tome_and_Principe', 'Saudi_Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra_Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon_Islands', 'Somalia', 'South_Africa', 'South_Sudan', 'Spain', 'Sri_Lanka', 'Sudan', 'Suriname', 'Swaziland', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Togo', 'Tonga', 'Trinidad_and_Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'United_Arab_Emirates', 'United_Kingdom', 'United_States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican_City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe', name='country'), nullable=False),
+    sa.Column('address', sa.String(length=500), nullable=True),
+    sa.Column('description', sa.String(length=1000), nullable=True),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('user_id'),
     sa.UniqueConstraint('api_endpoint'),
     sa.UniqueConstraint('name')
     )
-    op.create_table('organization_admins',
-    sa.Column('first_name', sa.String(length=200), nullable=False),
-    sa.Column('last_name', sa.String(length=200), nullable=False),
+    op.create_table('verification_tokens',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('token', sa.String(), nullable=False),
+    sa.Column('type', sa.Enum('EMAIL_VERIFICATION', 'PASSWORD_RESET', name='tokentype'), nullable=False),
+    sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('organization_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('user_id'),
-    sa.UniqueConstraint('first_name'),
-    sa.UniqueConstraint('last_name')
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('token')
     )
+    op.create_index(op.f('ix_verification_tokens_id'), 'verification_tokens', ['id'], unique=False)
+    op.create_table('approval_requests',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('organization_user_id', sa.Integer(), nullable=False),
+    sa.Column('requested_by_user_id', sa.Integer(), nullable=True),
+    sa.Column('target_type', sa.Enum('election', 'candidate', name='approvaltargettype'), nullable=False),
+    sa.Column('action', sa.Enum('create', 'update', 'delete', name='approvalaction'), nullable=False),
+    sa.Column('target_id', sa.String(length=255), nullable=False),
+    sa.Column('payload', sa.Text(), nullable=True),
+    sa.Column('status', sa.Enum('pending', 'approved', 'rejected', name='approvalstatus'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('decided_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('decided_by_user_id', sa.Integer(), nullable=True),
+    sa.ForeignKeyConstraint(['decided_by_user_id'], ['users.id'], ondelete='SET NULL'),
+    sa.ForeignKeyConstraint(['organization_user_id'], ['organizations.user_id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['requested_by_user_id'], ['users.id'], ondelete='SET NULL'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_approval_requests_id'), 'approval_requests', ['id'], unique=False)
+    op.create_index(op.f('ix_approval_requests_organization_user_id'), 'approval_requests', ['organization_user_id'], unique=False)
     op.create_table('candidates',
     sa.Column('hashed_national_id', sa.String(length=200), nullable=False),
-    sa.Column('create_req_status', sa.Enum('pending', 'accepted', 'rejected', name='status'), nullable=False),
     sa.Column('name', sa.String(length=200), nullable=False),
     sa.Column('district', sa.String(length=100), nullable=True),
-    sa.Column('governerate', sa.String(length=100), nullable=True),
+    sa.Column('governorate', sa.String(length=100), nullable=True),
     sa.Column('country', sa.Enum('Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia_and_Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria', 'Burkina_Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape_Verde', 'Central_African_Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo', 'Costa_Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech_Republic', 'Denmark', 'Djibouti', 'Dominica', 'Dominican_Republic', 'East_Timor', 'Ecuador', 'Egypt', 'El_Salvador', 'Equatorial_Guinea', 'Eritrea', 'Estonia', 'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea_Bissau', 'Guyana', 'Haiti', 'Honduras', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy', 'Ivory_Coast', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Korea_North', 'Korea_South', 'Kosovo', 'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macedonia', 'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall_Islands', 'Mauritania', 'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New_Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama', 'Papua_New_Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint_Kitts_and_Nevis', 'Saint_Lucia', 'Saint_Vincent_and_the_Grenadines', 'Samoa', 'San_Marino', 'Sao_Tome_and_Principe', 'Saudi_Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra_Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon_Islands', 'Somalia', 'South_Africa', 'South_Sudan', 'Spain', 'Sri_Lanka', 'Sudan', 'Suriname', 'Swaziland', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Togo', 'Tonga', 'Trinidad_and_Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'United_Arab_Emirates', 'United_Kingdom', 'United_States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican_City', 'Venezuela', 'Vietnam', 'Yemen', 'Zambia', 'Zimbabwe', name='country'), nullable=False),
     sa.Column('party', sa.String(length=100), nullable=True),
     sa.Column('symbol_icon_url', sa.String(length=500), nullable=True),
@@ -71,8 +90,6 @@ def upgrade() -> None:
     sa.Column('description', sa.String(length=200), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('organization_id', sa.Integer(), nullable=False),
-    sa.Column('organization_admin_id', sa.Integer(), nullable=True),
-    sa.ForeignKeyConstraint(['organization_admin_id'], ['organization_admins.user_id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('hashed_national_id')
     )
@@ -80,7 +97,6 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('types', sa.String(length=200), nullable=False),
     sa.Column('status', sa.String(length=200), nullable=False),
-    sa.Column('create_req_status', sa.String(length=200), nullable=False),
     sa.Column('title', sa.String(length=200), nullable=False),
     sa.Column('starts_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('ends_at', sa.DateTime(timezone=True), nullable=False),
@@ -89,13 +105,22 @@ def upgrade() -> None:
     sa.Column('number_of_candidates', sa.Integer(), nullable=False),
     sa.Column('num_of_votes_per_voter', sa.Integer(), nullable=False),
     sa.Column('potential_number_of_voters', sa.Integer(), nullable=False),
+    sa.Column('method', sa.String(length=50), nullable=False),
+    sa.Column('api_endpoint', sa.String(length=500), nullable=True),
     sa.Column('organization_id', sa.Integer(), nullable=False),
-    sa.Column('organization_admin_id', sa.Integer(), nullable=False),
-    sa.ForeignKeyConstraint(['organization_admin_id'], ['organization_admins.user_id'], ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['organization_id'], ['organizations.user_id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_elections_id'), 'elections', ['id'], unique=False)
+    op.create_table('organization_admins',
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('organization_user_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.ForeignKeyConstraint(['organization_user_id'], ['organizations.user_id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('user_id')
+    )
+    op.create_index(op.f('ix_organization_admins_organization_user_id'), 'organization_admins', ['organization_user_id'], unique=False)
     op.create_table('candidate_participations',
     sa.Column('vote_count', sa.Integer(), nullable=False),
     sa.Column('has_won', sa.Boolean(), nullable=True),
@@ -109,6 +134,11 @@ def upgrade() -> None:
     op.create_table('voters',
     sa.Column('voter_hashed_national_id', sa.String(length=200), nullable=False),
     sa.Column('phone_number', sa.String(length=20), nullable=False),
+    sa.Column('governerate', sa.String(length=100), nullable=True),
+    sa.Column('is_verified', sa.Boolean(), nullable=False),
+    sa.Column('otp_code', sa.String(length=10), nullable=True),
+    sa.Column('otp_expires_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('last_verified_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('election_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['election_id'], ['elections.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('voter_hashed_national_id'),
@@ -130,10 +160,16 @@ def downgrade() -> None:
     op.drop_table('voting_processes')
     op.drop_table('voters')
     op.drop_table('candidate_participations')
+    op.drop_index(op.f('ix_organization_admins_organization_user_id'), table_name='organization_admins')
+    op.drop_table('organization_admins')
     op.drop_index(op.f('ix_elections_id'), table_name='elections')
     op.drop_table('elections')
     op.drop_table('candidates')
-    op.drop_table('organization_admins')
+    op.drop_index(op.f('ix_approval_requests_organization_user_id'), table_name='approval_requests')
+    op.drop_index(op.f('ix_approval_requests_id'), table_name='approval_requests')
+    op.drop_table('approval_requests')
+    op.drop_index(op.f('ix_verification_tokens_id'), table_name='verification_tokens')
+    op.drop_table('verification_tokens')
     op.drop_table('organizations')
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_table('users')

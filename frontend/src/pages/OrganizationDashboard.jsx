@@ -1,30 +1,90 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Upload, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield } from 'lucide-react';
+import CandidatesList from "../components/CandidatesList";
+import ElectionsList from "../components/ElectionsList";
+import NotificationList from "../components/NotificationList";
+import Modal from "../components/Modal";
+import OrganizationAdminsTab from "../components/OrganizationAdminsTab";
+
+import { useOrganizationDashboardStats } from '../hooks/useOrganization';
+
+
 
 let OrganizationDashboard = () => {
     let { id } = useParams();
-    let { user, organizations, elections, candidates, addElection, addCandidate, notifications } = useApp();
+    let { user, isLoading, organizations, elections, candidates, addElection, addCandidate, notifications } = useApp();
     let [activeTab, setActiveTab] = useState('overview');
     let [showCreateElection, setShowCreateElection] = useState(false);
-    let [showUploadWarning, setShowUploadWarning] = useState(false);
+
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
+    
+    // Modal state
+    let [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
 
-    let organization = organizations.find((org) => org.id === id);
-    let orgElections = elections.filter((e) => e.organizationId === id);
-    let orgCandidates = candidates.filter((c) => orgElections.some((e) => e.candidates.includes(c.id)));
+    // Fetch dashboard stats from API
+    const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useOrganizationDashboardStats();
 
-    if (!organization) {
+    // Helper function to show modals
+    let showModal = (title, message, type = 'info') => {
+        setModalConfig({ isOpen: true, title, message, type });
+    };
+
+    let closeModal = () => {
+        setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
+    };
+
+    // Show loading while checking authentication
+    if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Organization Not Found</h1>
-                    <p className="text-gray-600">The requested organization does not exist.</p>
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+                    <p className="text-gray-600">Loading...</p>
                 </div>
             </div>
         );
     }
+
+    // Check if user is logged in and is an organization
+    if (!user || user.role !== 'organization') {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+                    <p className="text-gray-600">You must be logged in as an organization to access this page.</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Use the logged-in user's organization data instead of URL params
+    const userOrgId = user.organizationId?.toString();
+    const urlOrgId = id;
+
+    // Check if the URL organization ID matches the user's organization
+    if (userOrgId && urlOrgId && userOrgId !== urlOrgId) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+                    <p className="text-gray-600">You can only access your own organization's dashboard.</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Create organization object from user data
+    let organization = {
+        id: userOrgId || urlOrgId,
+        name: user.organizationName || 'Your Organization',
+        email: user.email,
+        // Add other organization fields as needed
+    };
+
+    let orgElections = elections.filter((e) => e.organizationId === (userOrgId || urlOrgId));
+    let orgCandidates = candidates.filter((c) => orgElections.some((e) => e.candidates.includes(c.id)));
 
     let CreateElectionModal = () => {
         let [formData, setFormData] = useState({
@@ -33,27 +93,114 @@ let OrganizationDashboard = () => {
             type: 'simple',
             startDate: '',
             endDate: '',
+            method: 'api', // 'api' or 'csv'
             voterEligibilityUrl: '',
+            candidatesFile: null,
+            votersFile: null,
+            numVotesPerVoter: 1,
+            potentialVoters: 100,
         });
 
-        let handleSubmit = (e) => {
+        let handleSubmit = async (e) => {
             e.preventDefault();
-            let election = {
-                ...formData,
-                organizationId: id,
-                status: 'upcoming',
-                candidates: [],
-                totalVotes: 0,
-            };
-            addElection(election);
-            setShowCreateElection(false);
+            
+            // Client-side validation
+            const now = new Date();
+            const startDateTime = new Date(formData.startDate);
+            const endDateTime = new Date(formData.endDate);
+            
+            if (startDateTime < now) {
+                showModal('Invalid Date', 'Start date and time cannot be in the past.', 'error');
+                return;
+            }
+            
+            if (endDateTime < startDateTime) {
+                showModal('Invalid Date', 'End date and time must be after or equal to start date and time.', 'error');
+                return;
+            }
+            
+            if (formData.method === 'csv') {
+                // Handle CSV upload
+                await handleCsvElectionCreation();
+            } else {
+                // Handle API method
+                await handleApiElectionCreation();
+            }
+        };
+
+        let handleApiElectionCreation = async () => {
+            try {
+                const electionData = {
+                    title: formData.title,
+                    types: 'api_managed', // API will handle voting constraints
+                    starts_at: new Date(formData.startDate).toISOString(),
+                    ends_at: new Date(formData.endDate).toISOString(),
+                    num_of_votes_per_voter: formData.numVotesPerVoter,
+                    potential_number_of_voters: formData.potentialVoters,
+                    method: 'api',
+                    api_endpoint: formData.voterEligibilityUrl,
+                };
+
+                // Call API endpoint for election creation
+                const { electionApi } = await import('../services/api');
+                const newElection = await electionApi.create(electionData);
+                
+                // Add to local state (this will be replaced with react-query later)
+                addElection(newElection);
+                setShowCreateElection(false);
+                resetForm();
+                
+            } catch (error) {
+                console.error('Error creating election:', error);
+                showModal('Error', 'Failed to create election. Please try again.', 'error');
+            }
+        };
+
+        let handleCsvElectionCreation = async () => {
+            try {
+                if (!formData.candidatesFile || !formData.votersFile) {
+                    showModal('Missing Files', 'Please select both candidates and voters CSV files.', 'warning');
+                    return;
+                }
+
+                const formDataObj = new FormData();
+                formDataObj.append('title', formData.title);
+                formDataObj.append('types', formData.type);
+                formDataObj.append('starts_at', new Date(formData.startDate).toISOString());
+                formDataObj.append('ends_at', new Date(formData.endDate).toISOString());
+                formDataObj.append('num_of_votes_per_voter', formData.numVotesPerVoter);
+                formDataObj.append('potential_number_of_voters', formData.potentialVoters);
+                formDataObj.append('candidates_file', formData.candidatesFile);
+                formDataObj.append('voters_file', formData.votersFile);
+
+                // Call CSV upload endpoint
+                const { electionApi } = await import('../services/api');
+                const newElection = await electionApi.createWithCsv(formDataObj);
+                
+                // Add to local state
+                addElection(newElection);
+                setShowCreateElection(false);
+                resetForm();
+                
+            } catch (error) {
+                console.error('Error creating election with CSV:', error);
+                showModal('Error', 'Failed to create election. Please check your CSV files and try again.', 'error');
+            }
+        };
+
+        let resetForm = () => {
             setFormData({
                 title: '',
                 description: '',
                 type: 'simple',
                 startDate: '',
                 endDate: '',
+                method: 'api',
                 voterEligibilityUrl: '',
+                candidatesFile: null,
+                votersFile: null,
+                numVotesPerVoter: 1,
+                potentialVoters: 100,
             });
         };
 
@@ -62,6 +209,7 @@ let OrganizationDashboard = () => {
                 <div className="bg-white rounded-xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                     <h3 className="text-2xl font-bold text-gray-900 mb-6">Create New Election</h3>
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* 1. Election Title */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Election Title</label>
                             <input
@@ -72,63 +220,206 @@ let OrganizationDashboard = () => {
                                 required
                             />
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                            <textarea
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                rows="3"
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Election Type</label>
-                            <select
-                                value={formData.type}
-                                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            >
-                                <option value="simple">Simple Election</option>
-                                <option value="district-based">District-Based</option>
-                                <option value="governorate-based">Governorate-Based</option>
-                            </select>
-                        </div>
+
+                        {/* 2. Start Date & Time - End Date & Time */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Start Date & Time</label>
                                 <input
-                                    type="date"
+                                    type="datetime-local"
                                     value={formData.startDate}
                                     onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    min={new Date().toISOString().slice(0, 16)}
+                                    required
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Start time cannot be in the past</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">End Date & Time</label>
+                                <input
+                                    type="datetime-local"
+                                    value={formData.endDate}
+                                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    min={formData.startDate || new Date().toISOString().slice(0, 16)}
+                                    required
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Must be after or equal to start time</p>
+                            </div>
+                        </div>
+
+                        {/* 3. Votes per Voter - Expected Voters */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Votes per Voter</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={formData.numVotesPerVoter}
+                                    onChange={(e) => setFormData({ ...formData, numVotesPerVoter: parseInt(e.target.value) })}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     required
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Expected Voters</label>
                                 <input
-                                    type="date"
-                                    value={formData.endDate}
-                                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                                    type="number"
+                                    min="1"
+                                    value={formData.potentialVoters}
+                                    onChange={(e) => setFormData({ ...formData, potentialVoters: parseInt(e.target.value) })}
                                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     required
                                 />
                             </div>
                         </div>
+
+                        {/* 4. How do you want to set up voters and candidates? */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Voter Eligibility API URL
-                            </label>
-                            <input
-                                type="url"
-                                value={formData.voterEligibilityUrl}
-                                onChange={(e) => setFormData({ ...formData, voterEligibilityUrl: e.target.value })}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="https://api.your-system.com/verify-voter"
-                                required
-                            />
+                            <label className="block text-sm font-medium text-gray-700 mb-3">How do you want to set up voters and candidates?</label>
+                            <div className="space-y-3">
+                                <div 
+                                    className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                                        formData.method === 'api' 
+                                            ? 'border-blue-500 bg-blue-50' 
+                                            : 'border-gray-300 hover:border-gray-400'
+                                    }`}
+                                    onClick={() => setFormData({ ...formData, method: 'api', type: 'api_managed' })}
+                                >
+                                    <div className="flex items-center">
+                                        <input
+                                            type="radio"
+                                            name="method"
+                                            value="api"
+                                            checked={formData.method === 'api'}
+                                            onChange={(e) => setFormData({ ...formData, method: e.target.value, type: 'api_managed' })}
+                                            className="h-4 w-4 text-blue-600"
+                                        />
+                                        <div className="ml-3">
+                                            <h4 className="font-medium text-gray-900">API Integration</h4>
+                                            <p className="text-sm text-gray-600">Provide an API endpoint for voter eligibility and candidate mapping</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div 
+                                    className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                                        formData.method === 'csv' 
+                                            ? 'border-blue-500 bg-blue-50' 
+                                            : 'border-gray-300 hover:border-gray-400'
+                                    }`}
+                                    onClick={() => setFormData({ ...formData, method: 'csv', type: 'simple' })}
+                                >
+                                    <div className="flex items-center">
+                                        <input
+                                            type="radio"
+                                            name="method"
+                                            value="csv"
+                                            checked={formData.method === 'csv'}
+                                            onChange={(e) => setFormData({ ...formData, method: e.target.value, type: 'simple' })}
+                                            className="h-4 w-4 text-blue-600"
+                                        />
+                                        <div className="ml-3">
+                                            <h4 className="font-medium text-gray-900">CSV File Upload</h4>
+                                            <p className="text-sm text-gray-600">Upload CSV files for candidates and eligible voters</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
+
+                        {/* 5. Election Type (only show for CSV method) */}
+                        {formData.method === 'csv' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Election Type</label>
+                                <select
+                                    value={formData.type}
+                                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="simple">Simple Election</option>
+                                    <option value="district_based">District-Based</option>
+                                    <option value="governorate_based">Governorate-Based</option>
+                                </select>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Election type determines voting constraints. Simple allows anyone to vote for anyone, while district/governorate-based elections restrict voting to matching geographical areas.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Conditional fields based on method */}
+                        {formData.method === 'api' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Voter Eligibility API URL
+                                </label>
+                                <input
+                                    type="url"
+                                    value={formData.voterEligibilityUrl}
+                                    onChange={(e) => setFormData({ ...formData, voterEligibilityUrl: e.target.value })}
+                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="https://api.your-system.com/verify-voter"
+                                    required
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                    API should return voter eligibility and candidate-voter mapping information
+                                </p>
+                            </div>
+                        )}
+
+                        {formData.method === 'csv' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Candidates CSV File
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={(e) => setFormData({ ...formData, candidatesFile: e.target.files[0] })}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        required
+                                    />
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Required columns: hashed_national_id, name, country, birth_date
+                                        {formData.type === 'district_based' && ', district'}
+                                        {formData.type === 'governorate_based' && ', governorate'}
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Voters CSV File
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={(e) => setFormData({ ...formData, votersFile: e.target.files[0] })}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        required
+                                    />
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Required columns: voter_hashed_national_id, phone_number
+                                        {formData.type === 'district_based' && ', district'}
+                                        {formData.type === 'governorate_based' && ', governorate'}
+                                    </p>
+                                </div>
+
+                                {formData.type !== 'simple' && (
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <h4 className="font-medium text-blue-900 mb-2">Election Type: {formData.type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</h4>
+                                        <p className="text-sm text-blue-700">
+                                            {formData.type === 'district_based' 
+                                                ? 'Voters can only vote for candidates in their district. Make sure both CSV files include district information.'
+                                                : 'Voters can only vote for candidates in their governorate. Make sure both CSV files include governorate information.'
+                                            }
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         <div className="flex space-x-4">
                             <button
                                 type="submit"
@@ -150,118 +441,102 @@ let OrganizationDashboard = () => {
         );
     };
 
-    let FileUploadWithSecurityWarning = () => {
-        return (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Upload Voter List (CSV)</h3>
 
-                {showUploadWarning && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-                        <div className="flex items-start space-x-3">
-                            <AlertTriangle className="h-5 w-5 text-yellow-500 mt-0.5" />
+
+    let renderOverview = () => {
+        if (statsLoading) {
+            return (
+                <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    <span className="ml-2 text-gray-600">Loading dashboard statistics...</span>
+                </div>
+            );
+        }
+
+        if (statsError) {
+            return (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <p className="text-red-700">Failed to load dashboard statistics. Please try again later.</p>
+                </div>
+            );
+        }
+
+        const stats = dashboardStats || {
+            total_elections: 0,
+            total_candidates: 0,
+            total_votes: 0,
+            recent_elections: []
+        };
+
+        return (
+            <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
+                        <div className="flex items-center justify-between">
                             <div>
-                                <h4 className="text-sm font-medium text-yellow-800">Security Warning</h4>
-                                <p className="text-sm text-yellow-700 mt-1">
-                                    Uploading CSV files for voter verification is less secure than using API
-                                    integration. This method is recommended only for small organizations with limited
-                                    technical resources. Ensure your CSV file contains only necessary data and is
-                                    properly secured.
-                                </p>
+                                <p className="text-sm font-medium text-gray-600">Total Elections</p>
+                                <p className="text-3xl font-bold text-gray-900">{stats.total_elections}</p>
                             </div>
+                            <Vote className="h-12 w-12 text-blue-500" />
                         </div>
                     </div>
-                )}
-
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                    <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600 mb-4">Drop your CSV file here or click to browse</p>
-                    <input
-                        type="file"
-                        accept=".csv"
-                        className="hidden"
-                        id="csv-upload"
-                        onChange={() => setShowUploadWarning(true)}
-                    />
-                    <label
-                        htmlFor="csv-upload"
-                        className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200 cursor-pointer"
-                    >
-                        Choose File
-                    </label>
+                    <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Total Candidates</p>
+                                <p className="text-3xl font-bold text-gray-900">{stats.total_candidates}</p>
+                            </div>
+                            <Users className="h-12 w-12 text-purple-500" />
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">Total Votes</p>
+                                <p className="text-3xl font-bold text-gray-900">{stats.total_votes}</p>
+                            </div>
+                            <Vote className="h-12 w-12 text-green-500" />
+                        </div>
+                    </div>
                 </div>
 
-                <div className="mt-4 text-sm text-gray-600">
-                    <p className="font-medium mb-2">CSV Format Requirements:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                        <li>Columns: National ID, Full Name, Email (optional)</li>
-                        <li>Maximum file size: 10MB</li>
-                        <li>Encoding: UTF-8</li>
-                    </ul>
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Elections</h3>
+                    <div className="space-y-4">
+                        {stats.recent_elections.length === 0 ? (
+                            <p className="text-gray-500 text-center py-4">No elections created yet</p>
+                        ) : (
+                            stats.recent_elections.map((election) => (
+                                <div key={election.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                                    <div>
+                                        <h4 className="font-medium text-gray-900">{election.title}</h4>
+                                        <p className="text-sm text-gray-600">{election.total_vote_count} votes cast</p>
+                                        <p className="text-xs text-gray-500">
+                                            {new Date(election.starts_at).toLocaleDateString()} - {new Date(election.ends_at).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span
+                                            className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                                election.status === 'active'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : election.status === 'upcoming'
+                                                      ? 'bg-blue-100 text-blue-800'
+                                                      : 'bg-gray-100 text-gray-800'
+                                            }`}
+                                        >
+                                            {election.status}
+                                        </span>
+                                        <p className="text-xs text-gray-500 mt-1">{election.number_of_candidates} candidates</p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
         );
     };
-
-    let renderOverview = () => (
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Total Elections</p>
-                            <p className="text-3xl font-bold text-gray-900">{orgElections.length}</p>
-                        </div>
-                        <Vote className="h-12 w-12 text-blue-500" />
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Total Candidates</p>
-                            <p className="text-3xl font-bold text-gray-900">{orgCandidates.length}</p>
-                        </div>
-                        <Users className="h-12 w-12 text-purple-500" />
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Total Votes</p>
-                            <p className="text-3xl font-bold text-gray-900">
-                                {orgElections.reduce((sum, e) => sum + e.totalVotes, 0)}
-                            </p>
-                        </div>
-                        <Vote className="h-12 w-12 text-green-500" />
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Elections</h3>
-                <div className="space-y-4">
-                    {orgElections.slice(0, 3).map((election) => (
-                        <div key={election.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                            <div>
-                                <h4 className="font-medium text-gray-900">{election.title}</h4>
-                                <p className="text-sm text-gray-600">{election.totalVotes} votes cast</p>
-                            </div>
-                            <span
-                                className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                    election.status === 'active'
-                                        ? 'bg-green-100 text-green-800'
-                                        : election.status === 'upcoming'
-                                          ? 'bg-blue-100 text-blue-800'
-                                          : 'bg-gray-100 text-gray-800'
-                                }`}
-                            >
-                                {election.status}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
 
     return (
         <div className="min-h-screen p-8">
@@ -276,7 +551,7 @@ let OrganizationDashboard = () => {
                         { id: 'overview', label: 'Overview', icon: Vote },
                         { id: 'elections', label: 'Elections', icon: Vote },
                         { id: 'candidates', label: 'Candidates', icon: Users },
-                        { id: 'voters', label: 'Voter Management', icon: Upload },
+                        { id: 'admins', label: 'Admins', icon: Shield },
                         { id: 'notifications', label: 'Notifications', icon: Bell },
                     ].map((tab) => {
                         const Icon = tab.icon;
@@ -300,67 +575,45 @@ let OrganizationDashboard = () => {
                 {activeTab === 'overview' && renderOverview()}
 
                 {activeTab === 'elections' && (
-                    <div className="space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-2xl font-bold text-gray-900">Elections</h2>
-                            <button
-                                onClick={() => setShowCreateElection(true)}
-                                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2"
-                            >
-                                <Plus className="h-4 w-4" />
-                                <span>Create Election</span>
-                            </button>
-                        </div>
-
-                        <div className="grid gap-6">
-                            {orgElections.map((election) => (
-                                <div
-                                    key={election.id}
-                                    className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6"
-                                >
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="text-xl font-semibold text-gray-900">{election.title}</h3>
-                                            <p className="text-gray-600 mt-1">{election.description}</p>
-                                        </div>
-                                        <span
-                                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                                election.status === 'active'
-                                                    ? 'bg-green-100 text-green-800'
-                                                    : election.status === 'upcoming'
-                                                      ? 'bg-blue-100 text-blue-800'
-                                                      : 'bg-gray-100 text-gray-800'
-                                            }`}
-                                        >
-                                            {election.status}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-6 text-sm text-gray-600">
-                                            <span>Type: {election.type}</span>
-                                            <span>Votes: {election.totalVotes}</span>
-                                            <span>
-                                                {election.startDate} - {election.endDate}
-                                            </span>
-                                        </div>
-                                        <div className="flex space-x-2">
-                                            <button className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
-                                                <Edit className="h-4 w-4" />
-                                            </button>
-                                            <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
-                                                <Trash2 className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <ElectionsList onCreateElection={() => setShowCreateElection(true)} />
                 )}
 
-                {activeTab === 'voters' && <FileUploadWithSecurityWarning />}
+                {activeTab === 'candidates' && (
+                   <div className="space-y-6">
+                     <h2 className="text-2xl font-bold text-gray-900">Candidates</h2>
+                     <CandidatesList />
+                   </div>
+                )}
+
+                {activeTab === 'admins' && (
+                   <div className="space-y-6">
+                     <h2 className="text-2xl font-bold text-gray-900">Organization Admins</h2>
+                     <OrganizationAdminsTab />
+                   </div>
+                )}
+
+                {activeTab === 'notifications' && (
+                   <div className="space-y-6">
+                     <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
+                     <NotificationList />
+                   </div>
+                )}
+
+
 
                 {showCreateElection && <CreateElectionModal />}
+                
+                {/* Modal for notifications */}
+                <Modal
+                    isOpen={modalConfig.isOpen}
+                    onClose={closeModal}
+                    title={modalConfig.title}
+                    type={modalConfig.type}
+                >
+                    <div className="text-center">
+                        <p className="text-sm text-gray-600">{modalConfig.message}</p>
+                    </div>
+                </Modal>
             </div>
         </div>
     );

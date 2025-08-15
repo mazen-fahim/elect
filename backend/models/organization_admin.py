@@ -1,36 +1,24 @@
-from typing import TYPE_CHECKING
+from datetime import datetime
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from . import Base
-
-if TYPE_CHECKING:
-    from .candidate import Candidate
-    from .election import Election
-    from .organization import Organization
-    from .user import User
+from core.base import Base
 
 
 class OrganizationAdmin(Base):
     __tablename__ = "organization_admins"
 
-    first_name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
-
-    last_name: Mapped[str] = mapped_column(String(200), unique=True, nullable=False)
-
-    # Foreign Keys
+    # The admin user ID
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
 
-    organization_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("organizations.user_id", ondelete="CASCADE"), nullable=False
+    # The owning organization user ID (points to organizations.user_id)
+    organization_user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.user_id", ondelete="CASCADE"), nullable=False, index=True
     )
 
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="organization_admin")
-
-    organization: Mapped["Organization"] = relationship("Organization", back_populates="admins")
-
-    candidates: Mapped["Candidate"] = relationship("Candidate", back_populates="organization_admin")
-
-    elections: Mapped["Election"] = relationship("Election", back_populates="organization_admin")
+    user = relationship("User", foreign_keys=[user_id])
+    organization = relationship("Organization", foreign_keys=[organization_user_id])

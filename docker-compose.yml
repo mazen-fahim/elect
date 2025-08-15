@@ -10,6 +10,7 @@ services:
       - "8000:8000"
     depends_on:
       - postgres
+      - redis
     env_file:
       - .env.example
     # this is unnecessary for this backend container (but for development sake just in case)
@@ -55,7 +56,11 @@ services:
       - backend
      
 
-# instructs Docker Compose to create the named
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
 # volume postgres_data if it doesn't already exist.
 # This is because one or more services reference this volume in their configuration.
 volumes:
