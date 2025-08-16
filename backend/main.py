@@ -17,9 +17,9 @@ from routers import (
     election,
     home,
     notification,
-    system_admin,
     organization,
     organization_admin,
+    system_admin,
     voter,
     voting_process,
 )
