@@ -109,8 +109,23 @@ async def create_org_admin(
         created_at=datetime.now(timezone.utc),
     )
     db.add(org_admin)
+    
+    # Store the values before commit to avoid expired object issues
+    user_id = new_user.id
+    user_email = new_user.email
+    user_first_name = new_user.first_name
+    user_last_name = new_user.last_name
+    admin_created_at = org_admin.created_at
+    
     await db.commit()
-    return OrganizationAdminRead(user_id=new_user.id, email=new_user.email, first_name=new_user.first_name, last_name=new_user.last_name, created_at=org_admin.created_at)
+    
+    return OrganizationAdminRead(
+        user_id=user_id, 
+        email=user_email, 
+        first_name=user_first_name, 
+        last_name=user_last_name, 
+        created_at=admin_created_at
+    )
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -128,14 +143,28 @@ async def delete_org_admin(user_id: int, db: db_dependency, current_org_user: or
     if not admin:
         raise HTTPException(status_code=404, detail="Organization admin not found")
 
-    # Also deactivate user
+    # Get the user record
     ures = await db.execute(select(User).where(User.id == user_id))
     user = ures.scalar_one_or_none()
-    if user:
-        user.is_active = False
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    await db.delete(admin)
-    await db.commit()
+    try:
+        # Delete the organization admin record first
+        await db.delete(admin)
+        
+        # Delete the user record
+        await db.delete(user)
+        
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        print(f"Error deleting organization admin: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Failed to delete organization admin. Please try again."
+        )
+    
     return
 
 
@@ -183,29 +212,40 @@ async def update_self(
         user.password = auth.get_password_hash(payload.password)
         changes.append("password")
 
+    # Store the values before commit to avoid expired object issues
+    user_id = user.id
+    user_email = user.email
+    user_first_name = user.first_name
+    user_last_name = user.last_name
+
     await db.commit()
 
     # Notify the organization boss (organization_user_id) about the update
     # Map this admin to its organization_user_id
-    mapping_res = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id))
+    mapping_res = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == user_id))
     mapping = mapping_res.scalar_one_or_none()
     if mapping:
         try:
             notifier = NotificationService(db)
             title = "Organization Admin Updated Profile"
-            message = f"Admin user {user.email} updated: {', '.join(changes) if changes else 'no changes'}"
+            message = f"Admin user {user_email} updated: {', '.join(changes) if changes else 'no changes'}"
             await notifier.create_notification(
                 organization_id=mapping.organization_user_id,
                 notification_type=NotificationType.ORGANIZATION_SETTINGS_CHANGED,
                 title=title,
                 message=message,
-                additional_data={"admin_user_id": user.id, "changes": changes},
+                additional_data={"admin_user_id": user_id, "changes": changes},
             )
         except Exception:
             # Do not block the update on notification errors
             pass
 
-    return OrganizationAdminSelfUpdateResponse(user_id=user.id, email=user.email, first_name=user.first_name, last_name=user.last_name)
+    return OrganizationAdminSelfUpdateResponse(
+        user_id=user_id, 
+        email=user_email, 
+        first_name=user_first_name, 
+        last_name=user_last_name
+    )
 
 
 @router.put("/{user_id}", response_model=OrganizationAdminSelfUpdateResponse)
@@ -253,6 +293,17 @@ async def update_org_admin(
         auth = AuthService(db)
         user.password = auth.get_password_hash(payload.password)
 
+    # Store the values before commit to avoid expired object issues
+    user_id = user.id
+    user_email = user.email
+    user_first_name = user.first_name
+    user_last_name = user.last_name
+
     await db.commit()
 
-    return OrganizationAdminSelfUpdateResponse(user_id=user.id, email=user.email, first_name=user.first_name, last_name=user.last_name)
+    return OrganizationAdminSelfUpdateResponse(
+        user_id=user_id, 
+        email=user_email, 
+        first_name=user_first_name, 
+        last_name=user_last_name
+    )

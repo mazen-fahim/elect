@@ -2,6 +2,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, Form, Depends, Q
 import json
 from sqlalchemy.future import select
 from sqlalchemy import and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 import pandas as pd
 from typing import Optional, List
@@ -23,7 +24,23 @@ from sqlalchemy import func
 router = APIRouter(prefix="/election", tags=["elections"])
 
 
-async def _get_actual_candidate_count(election_id: int, db) -> int:
+@router.get("/test", status_code=status.HTTP_200_OK)
+async def test_election_endpoint(db: db_dependency):
+    """Test endpoint to verify database connectivity"""
+    try:
+        # Test basic database connection
+        result = await db.execute(select(func.count(Election.id)))
+        count = result.scalar()
+        return {"message": "Election endpoint working", "total_elections": count}
+    except Exception as e:
+        print(f"Database test error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database connection test failed: {str(e)}"
+        )
+
+
+async def _get_actual_candidate_count(election_id: int, db: AsyncSession) -> int:
     """Get the actual count of candidates for an election from the participation table"""
     result = await db.execute(
         select(func.count(CandidateParticipation.candidate_hashed_national_id)).where(
@@ -33,7 +50,7 @@ async def _get_actual_candidate_count(election_id: int, db) -> int:
     return result.scalar() or 0
 
 
-async def _sync_election_candidate_count(election: Election, db) -> None:
+async def _sync_election_candidate_count(election: Election, db: AsyncSession) -> None:
     """Sync the election's candidate count with the actual count from participations"""
     actual_count = await _get_actual_candidate_count(election.id, db)
     election.number_of_candidates = actual_count
@@ -129,7 +146,7 @@ async def get_specific_election(election_id: int, db: db_dependency, current_use
 
 
 async def _create_candidates_from_data(
-    candidates_data: list[dict], election_id: int, organization_id: int, db
+    candidates_data: list[dict], election_id: int, organization_id: int, db: AsyncSession
 ) -> list[Candidate]:
     """Helper function to create candidates and their participations"""
     created_candidates = []
@@ -171,7 +188,7 @@ async def _create_candidates_from_data(
     return created_candidates
 
 
-async def _create_voters_from_data(voters_data: list[dict], election_id: int, db) -> list[Voter]:
+async def _create_voters_from_data(voters_data: list[dict], election_id: int, db: AsyncSession) -> list[Voter]:
     """Helper function to create voters"""
     created_voters = []
 
@@ -191,107 +208,171 @@ async def _create_voters_from_data(voters_data: list[dict], election_id: int, db
 @router.post("/", response_model=dict | ElectionOut, status_code=201)
 async def create_election(election_data: ElectionCreate, db: db_dependency, current_user: organization_dependency):
     """Create election with optional candidates and voters"""
-    if election_data.ends_at <= election_data.starts_at:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End date must be after start date")
+    try:
+        print(f"Creating election with data: {election_data.model_dump()}")
+        
+        if election_data.ends_at <= election_data.starts_at:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End date must be after start date")
 
-    # Use the organization ID from the authenticated user
-    organization_id = current_user.id
+        # Use the organization ID from the authenticated user
+        organization_id = current_user.id
+        print(f"Organization ID: {organization_id}, User role: {current_user.role}")
 
-    # Strict pre-approval: if requester is organization_admin, stage request only
-    if current_user.role == UserRole.organization_admin:
+        # Strict pre-approval: if requester is organization_admin, stage request only
+        if current_user.role == UserRole.organization_admin:
+            try:
+                payload_json = json.dumps(election_data.model_dump(mode="json"))
+            except Exception as e:
+                print(f"Error serializing election payload: {e}")
+                raise HTTPException(status_code=400, detail=f"Invalid election payload: {e}")
+
+            approval = ApprovalRequest(
+                organization_user_id=organization_id,
+                requested_by_user_id=current_user.id,
+                target_type=ApprovalTargetType.election,
+                action=ApprovalAction.create,
+                target_id="pending",
+                payload=payload_json,
+                status=ApprovalStatus.pending,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(approval)
+            await db.commit()
+            await db.refresh(approval)
+            return {"request_id": approval.id, "status": "pending", "message": "Election creation pending approval"}
+
+        # Create the election
+        print("Creating new election object...")
+        
+        # Handle method field - it could be an enum or a string
+        method_value = election_data.method.value if hasattr(election_data.method, 'value') else str(election_data.method)
+        
+        new_election = Election(
+            title=election_data.title,
+            types=election_data.types,
+            organization_id=organization_id,
+            starts_at=election_data.starts_at,
+            ends_at=election_data.ends_at,
+            num_of_votes_per_voter=election_data.num_of_votes_per_voter,
+            potential_number_of_voters=election_data.potential_number_of_voters,
+            method=method_value,
+            api_endpoint=election_data.api_endpoint,
+            status="upcoming",
+        )
+
+        print("Adding election to database...")
+        db.add(new_election)
+        await db.flush()  # Flush to get the election ID
+        print(f"Election created with ID: {new_election.id}")
+
+        # Handle candidates if provided
+        candidates_count = 0
+        if election_data.candidates:
+            print(f"Processing {len(election_data.candidates)} candidates...")
+            candidates_data = [candidate.model_dump() for candidate in election_data.candidates]
+            await _create_candidates_from_data(candidates_data, new_election.id, organization_id, db)
+
+        # Handle voters if provided
+        voters_count = 0
+        if election_data.voters:
+            print(f"Processing {len(election_data.voters)} voters...")
+            voters_data = [voter.model_dump() for voter in election_data.voters]
+            await _create_voters_from_data(voters_data, new_election.id, db)
+            voters_count = len(voters_data)
+
+        # Sync election counts with actual data
+        print("Syncing election counts...")
+        await _sync_election_candidate_count(new_election, db)
+        if voters_count > 0:
+            new_election.potential_number_of_voters = voters_count
+
+        # Store values before commit to avoid expired ORM object issues
+        election_id = new_election.id
+        election_title = new_election.title
+        election_starts_at = new_election.starts_at
+        election_ends_at = new_election.ends_at
+        election_created_at = new_election.created_at
+
+        # If the creator is an organization admin, create an approval request
+        if current_user.role == UserRole.organization_admin:
+            print("Creating approval request for organization admin...")
+            approval = ApprovalRequest(
+                organization_user_id=organization_id,
+                requested_by_user_id=current_user.id,
+                target_type=ApprovalTargetType.election,
+                action=ApprovalAction.create,
+                target_id=str(election_id),  # Use stored value instead of new_election.id
+                payload=None,
+                status=ApprovalStatus.pending,
+                created_at=election_created_at,  # Use stored value instead of new_election.created_at
+            )
+            db.add(approval)
+
+        # Create notification for election creation (moved to after commit to avoid session issues)
+        print("Notification creation will be handled after commit")
+
+        # Now commit everything at once
+        print("Committing election and related data to database...")
+        print(f"Database session before commit: {type(db)}, is_active: {getattr(db, 'is_active', 'unknown')}")
+        await db.commit()
+        print(f"Database session after commit: {type(db)}, is_active: {getattr(db, 'is_active', 'unknown')}")
+        
+        # Refresh the election object to make it usable again
+        await db.refresh(new_election)
+        print("Election committed and refreshed successfully")
+
+        # Create notification for election creation after commit
+        print("Creating notification after commit...")
         try:
-            payload_json = json.dumps(election_data.model_dump(mode="json"))
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid election payload: {e}")
+            # Create a fresh database session for notification service to avoid session conflicts
+            from core.dependencies import SessionLocal
+            async with SessionLocal() as notification_db:
+                print(f"Created fresh notification db session: {type(notification_db)}")
+                notification_service = NotificationService(notification_db)
+                print("Notification service created successfully")
+                
+                print(f"Creating election notification data with: id={election_id}, title={election_title}")
+                election_notification_data = ElectionNotificationData(
+                    election_id=election_id,
+                    election_title=election_title,
+                    start_time=election_starts_at,
+                    end_time=election_ends_at,
+                )
+                print("Election notification data created successfully")
+                
+                print("Calling create_election_created_notification...")
+                await notification_service.create_election_created_notification(
+                    organization_id=organization_id, election_data=election_notification_data
+                )
+                print("Notification created successfully")
+        except Exception as notification_error:
+            print(f"Warning: Failed to create election creation notification: {notification_error}")
+            print(f"Notification error details: {type(notification_error).__name__}: {str(notification_error)}")
+            import traceback
+            print(f"Notification error traceback: {traceback.format_exc()}")
+            # Don't fail the election creation if notification creation fails
 
-        approval = ApprovalRequest(
-            organization_user_id=organization_id,
-            requested_by_user_id=current_user.id,
-            target_type=ApprovalTargetType.election,
-            action=ApprovalAction.create,
-            target_id="pending",
-            payload=payload_json,
-            status=ApprovalStatus.pending,
-            created_at=datetime.now(timezone.utc),
+        print("Election creation completed successfully")
+        return new_election
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except ValueError as e:
+        print(f"Validation error in create_election: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Validation error: {str(e)}"
         )
-        db.add(approval)
-        await db.commit()
-        await db.refresh(approval)
-        return {"request_id": approval.id, "status": "pending", "message": "Election creation pending approval"}
-
-    # Create the election
-    new_election = Election(
-        title=election_data.title,
-        types=election_data.types,
-        organization_id=organization_id,
-        starts_at=election_data.starts_at,
-        ends_at=election_data.ends_at,
-        num_of_votes_per_voter=election_data.num_of_votes_per_voter,
-        potential_number_of_voters=election_data.potential_number_of_voters,
-        method=election_data.method.value,
-        api_endpoint=election_data.api_endpoint,
-        status="upcoming",
-    )
-
-    db.add(new_election)
-    await db.flush()  # Flush to get the election ID
-
-    # Handle candidates if provided
-    candidates_count = 0
-    if election_data.candidates:
-        candidates_data = [candidate.model_dump() for candidate in election_data.candidates]
-        await _create_candidates_from_data(candidates_data, new_election.id, organization_id, db)
-
-    # Handle voters if provided
-    voters_count = 0
-    if election_data.voters:
-        voters_data = [voter.model_dump() for voter in election_data.voters]
-        await _create_voters_from_data(voters_data, new_election.id, db)
-        voters_count = len(voters_data)
-
-    # Sync election counts with actual data
-    await _sync_election_candidate_count(new_election, db)
-    if voters_count > 0:
-        new_election.potential_number_of_voters = voters_count
-
-    # Store values before commit to avoid expired ORM object issues
-    election_id = new_election.id
-    election_title = new_election.title
-    election_starts_at = new_election.starts_at
-    election_ends_at = new_election.ends_at
-    election_created_at = new_election.created_at
-
-    await db.commit()
-    await db.refresh(new_election)
-
-    # If the creator is an organization admin, create an approval request
-    if current_user.role == UserRole.organization_admin:
-        approval = ApprovalRequest(
-            organization_user_id=organization_id,
-            requested_by_user_id=current_user.id,
-            target_type=ApprovalTargetType.election,
-            action=ApprovalAction.create,
-            target_id=str(new_election.id),
-            payload=None,
-            status=ApprovalStatus.pending,
-            created_at=new_election.created_at,
+    except Exception as e:
+        print(f"Unexpected error in create_election: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Internal server error: {str(e)}"
         )
-        db.add(approval)
-        await db.commit()
-
-    # Create notification for election creation
-    notification_service = NotificationService(db)
-    election_notification_data = ElectionNotificationData(
-        election_id=election_id,
-        election_title=election_title,
-        start_time=election_starts_at,
-        end_time=election_ends_at,
-    )
-    await notification_service.create_election_created_notification(
-        organization_id=organization_id, election_data=election_notification_data
-    )
-
-    return new_election
 
 
 @router.put("/{election_id}", response_model=ElectionOut)
@@ -722,20 +803,42 @@ async def create_election_with_csv(
         election_starts_at = new_election.starts_at
         election_ends_at = new_election.ends_at
 
+        # Now commit everything at once
+        print(f"Database session before commit: {type(db)}, is_active: {getattr(db, 'is_active', 'unknown')}")
         await db.commit()
+        print(f"Database session after commit: {type(db)}, is_active: {getattr(db, 'is_active', 'unknown')}")
         await db.refresh(new_election)
 
-        # Create notification for election creation
-        notification_service = NotificationService(db)
-        election_notification_data = ElectionNotificationData(
-            election_id=election_id,
-            election_title=election_title,
-            start_time=election_starts_at,
-            end_time=election_ends_at,
-        )
-        await notification_service.create_election_created_notification(
-            organization_id=organization_id, election_data=election_notification_data
-        )
+        # Create notification for election creation after commit
+        print("Creating notification after commit...")
+        try:
+            # Create a fresh database session for notification service to avoid session conflicts
+            from core.dependencies import SessionLocal
+            async with SessionLocal() as notification_db:
+                print(f"Created fresh notification db session: {type(notification_db)}")
+                notification_service = NotificationService(notification_db)
+                print("Notification service created successfully")
+                
+                print(f"Creating election notification data with: id={election_id}, title={election_title}")
+                election_notification_data = ElectionNotificationData(
+                    election_id=election_id,
+                    election_title=election_title,
+                    start_time=election_starts_at,
+                    end_time=election_ends_at,
+                )
+                print("Election notification data created successfully")
+                
+                print("Calling create_election_created_notification...")
+                await notification_service.create_election_created_notification(
+                    organization_id=organization_id, election_data=election_notification_data
+                )
+                print("Notification created successfully")
+        except Exception as notification_error:
+            print(f"Warning: Failed to create election creation notification: {notification_error}")
+            print(f"Notification error details: {type(notification_error).__name__}: {str(notification_error)}")
+            import traceback
+            print(f"Notification error traceback: {traceback.format_exc()}")
+            # Don't fail the election creation if notification creation fails
 
         return new_election
 
