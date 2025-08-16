@@ -17,8 +17,11 @@ SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine
 
 
 async def get_db():
-    async with SessionLocal() as session:
+    session = SessionLocal()
+    try:
         yield session
+    finally:
+        await session.close()
 
 
 db_dependency = Annotated[AsyncSession, Depends(get_db)]
