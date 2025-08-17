@@ -1,8 +1,39 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Vote, Shield, Users, TrendingUp, CheckCircle, Clock } from 'lucide-react';
+import { publicApi } from '../services/api';
 
 let Home = () => {
+    const [stats, setStats] = useState({
+        total_organizations: 0,
+        total_elections: 0,
+        total_candidates: 0,
+        total_votes: 0
+    });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const data = await publicApi.getHomeStats();
+                setStats(data.stats);
+            } catch (error) {
+                console.error('Failed to fetch home stats:', error);
+                // Fallback to default values if API fails
+                setStats({
+                    total_organizations: 0,
+                    total_elections: 0,
+                    total_candidates: 0,
+                    total_votes: 0
+                });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchStats();
+    }, []);
+
     return (
         <div className="min-h-screen">
             <section className="relative py-20 px-4 sm:px-6 lg:px-8">
@@ -134,22 +165,24 @@ let Home = () => {
                                 Making democracy more accessible, one election at a time
                             </p>
                         </div>
-                        <div className="grid md:grid-cols-4 gap-8 text-center">
+                        <div className="grid md:grid-cols-3 gap-8 text-center">
                             <div>
-                                <div className="text-4xl font-bold mb-2">250+</div>
+                                <div className="text-4xl font-bold mb-2">
+                                    {loading ? '...' : `${stats.total_organizations}+`}
+                                </div>
                                 <div className="text-lg opacity-90">Organizations</div>
                             </div>
                             <div>
-                                <div className="text-4xl font-bold mb-2">1.2M+</div>
+                                <div className="text-4xl font-bold mb-2">
+                                    {loading ? '...' : stats.total_votes === 0 ? '0' : `${(stats.total_votes / 1000000).toFixed(1)}M+`}
+                                </div>
                                 <div className="text-lg opacity-90">Votes Cast</div>
                             </div>
                             <div>
-                                <div className="text-4xl font-bold mb-2">500+</div>
+                                <div className="text-4xl font-bold mb-2">
+                                    {loading ? '...' : `${stats.total_elections}+`}
+                                </div>
                                 <div className="text-lg opacity-90">Elections Held</div>
-                            </div>
-                            <div>
-                                <div className="text-4xl font-bold mb-2">99.9%</div>
-                                <div className="text-lg opacity-90">Uptime</div>
                             </div>
                         </div>
                     </div>
@@ -169,12 +202,6 @@ let Home = () => {
                         >
                             Get Started Today
                         </Link>
-                        <Link
-                            to="/elections"
-                            className="px-8 py-4 bg-white text-gray-900 rounded-xl font-semibold border-2 border-gray-200 hover:border-gray-300 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
-                        >
-                            View Demo Elections
-                        </Link>
                     </div>
                 </div>
             </section>
@@ -183,4 +210,3 @@ let Home = () => {
 };
 
 export default Home;
-

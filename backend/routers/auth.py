@@ -41,6 +41,34 @@ async def login(login_request: LoginRequest, db: db_dependency):
     auth_service = AuthService(db)
     authenticated_user = await auth_service.authenticate_user(login_request)
 
+    # For organizations, check status before checking if user is active
+    if authenticated_user.role.value == "organization":
+        from sqlalchemy.future import select
+        from models.organization import Organization
+        
+        org_result = await db.execute(select(Organization).where(Organization.user_id == authenticated_user.id))
+        organization = org_result.scalar_one_or_none()
+        
+        if organization:
+            if organization.status.value == "pending":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Your organization registration is currently pending approval. Please wait for admin acceptance before logging in."
+                )
+            elif organization.status.value == "rejected":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Your organization registration has been rejected. Please contact support for assistance or reapply."
+                )
+            # If organization is approved, continue with normal flow
+        else:
+            # If no organization found, this shouldn't happen for valid organization users
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Organization not found. Please contact support."
+            )
+
+    # Now check if user is active (this will only happen for approved organizations or other user types)
     if not authenticated_user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="err.login.inactive")
 

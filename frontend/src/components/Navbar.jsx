@@ -42,6 +42,14 @@ let Navbar = () => {
                                 <Shield className="h-4 w-4" />
                                 <span>Dashboard</span>
                             </Link>
+                        ) : user?.role === 'admin' ? (
+                            <Link
+                                to="/SystemAdmin"
+                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/SystemAdmin')}`}
+                            >
+                                <Shield className="h-4 w-4" />
+                                <span>Dashboard</span>
+                            </Link>
                         ) : (
                             <>
                                 <Link
@@ -60,15 +68,6 @@ let Navbar = () => {
                                 </Link>
                             </>
                         )}
-                        {user?.role === 'admin' && (
-                            <Link
-                                to="/SystemAdmin"
-                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/SystemAdmin')}`}
-                            >
-                                <Shield className="h-4 w-4" />
-                                <span>Admin</span>
-                            </Link>
-                        )}
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -80,7 +79,12 @@ let Navbar = () => {
                         ) : user ? (
                             <div className="flex items-center space-x-3">
                                 <span className="text-sm font-medium text-gray-700">
-                                    Welcome, {user.role === 'organization' ? user.organizationName || user.name || 'Organization' : user.name || 'User'}
+                                    Welcome,{' '}
+                                    {user.role === 'organization'
+                                        ? user.organizationName || user.name || 'Organization'
+                                        : user.role === 'admin'
+                                        ? 'Admin'
+                                        : user.name || 'User'}
                                 </span>
                                 {user.role === 'organization' && (
                                     <>
@@ -98,6 +102,14 @@ let Navbar = () => {
                                             <User className="h-5 w-5" />
                                         </button>
                                     </>
+                                )}
+                                {user.role === 'admin' && (
+                                    <Link
+                                        to="/SystemAdmin"
+                                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-md hover:shadow-lg"
+                                    >
+                                        Dashboard
+                                    </Link>
                                 )}
                                 <button
                                     onClick={handleLogout}
@@ -141,7 +153,7 @@ let Navbar = () => {
                         description: user.description,
                         api_endpoint: user.api_endpoint,
                         status: user.status || 'active',
-                        created_at: user.created_at
+                        created_at: user.created_at,
                     }}
                     onUpdated={(updatedOrg) => {
                         // TODO: Update user context with new organization data

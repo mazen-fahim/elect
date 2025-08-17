@@ -145,8 +145,10 @@ const OrganizationAdminsTab = () => {
   const openEditModal = (admin) => {
     setEditingAdmin(admin);
     setFormData({
-      email: admin.email,
-      password: ''
+      email: admin.email || '',
+      password: '',
+      first_name: admin.first_name || '',
+      last_name: admin.last_name || ''
     });
     setShowEditModal(true);
   };
