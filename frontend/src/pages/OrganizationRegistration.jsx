@@ -18,8 +18,6 @@ let OrganizationRegistration = () => {
         email: '',
         password: '',
         confirmPassword: '',
-        first_name: '',
-        last_name: '',
         // Organization fields
         name: '',
         country: '',
@@ -42,7 +40,7 @@ let OrganizationRegistration = () => {
         const urlRegex = /^(https?:\/\/)?([\w\d-]+\.)+\w{2,}(\/.+)?$/;
 
         // Required fields validation
-        if (!formData.name || !formData.email || !formData.password || !formData.first_name || !formData.last_name || !formData.country) {
+        if (!formData.name || !formData.email || !formData.password || !formData.country) {
             setErrorMessage("Please fill in all required fields.");
             return false;
         }
@@ -85,7 +83,7 @@ let OrganizationRegistration = () => {
             
             await registerMutation.mutateAsync(registrationData);
             
-            setSuccessMessage("Registration successful! Please check your email to verify your account.");
+            setSuccessMessage("Registration successful! Your organization has been registered and is pending admin approval. You will be able to login once an administrator approves your registration. Please check your email for verification.");
             setErrorMessage('');
             
             // Redirect to login after 3 seconds
@@ -140,36 +138,6 @@ let OrganizationRegistration = () => {
                             type="email"
                             name="email"
                             value={formData.email}
-                            onChange={handleInputChange}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            required
-                        />
-                    </div>
-
-                    {/* First Name - Required */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            First Name *
-                        </label>
-                        <input
-                            type="text"
-                            name="first_name"
-                            value={formData.first_name}
-                            onChange={handleInputChange}
-                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                            required
-                        />
-                    </div>
-
-                    {/* Last Name - Required */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Last Name *
-                        </label>
-                        <input
-                            type="text"
-                            name="last_name"
-                            value={formData.last_name}
                             onChange={handleInputChange}
                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             required
@@ -283,6 +251,17 @@ let OrganizationRegistration = () => {
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-4">Register Your Organization</h1>
                     <p className="text-gray-600">Join our platform and start creating secure digital elections</p>
+                    
+                    {/* Information about approval process */}
+                    <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-2xl mx-auto">
+                        <div className="flex items-center justify-center text-blue-700">
+                            <AlertCircle className="h-5 w-5 mr-2" />
+                            <span className="text-sm font-medium">
+                                After registration, your organization will be reviewed by our administrators. 
+                                You'll receive an email once your account is approved and activated.
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Form container */}

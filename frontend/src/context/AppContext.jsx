@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-let AppContext = createContext();
+const AppContext = createContext();
 
 export const useApp = () => {
-    let context = useContext(AppContext);
+    const context = useContext(AppContext);
     if (!context) {
         throw new Error('useApp must be used within an AppProvider');
     }
@@ -11,9 +11,9 @@ export const useApp = () => {
 };
 
 export const AppProvider = ({ children }) => {
-    let [user, setUser] = useState(null);
-    let [isLoading, setIsLoading] = useState(true);
-    let [organizations, setOrganizations] = useState([
+    const [user, setUser] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [organizations, setOrganizations] = useState([
         {
             id: 'org1',
             name: 'Democratic Movement',
@@ -36,7 +36,7 @@ export const AppProvider = ({ children }) => {
         },
     ]);
 
-    let [elections, setElections] = useState([
+    const [elections, setElections] = useState([
         {
             id: 'election1',
             organizationId: 'org1',
@@ -78,7 +78,7 @@ export const AppProvider = ({ children }) => {
         },
     ]);
 
-    let [candidates, setCandidates] = useState([
+    const [candidates, setCandidates] = useState([
         {
             id: 'candidate1',
             name: 'Sarah Johnson',
@@ -137,8 +137,8 @@ export const AppProvider = ({ children }) => {
         },
     ]);
 
-    let [votes, setVotes] = useState([]);
-    let [notifications, setNotifications] = useState([]);
+    const [votes, setVotes] = useState([]);
+    const [notifications, setNotifications] = useState([]);
 
     // Initialize user state from token on app load
     useEffect(() => {
@@ -173,40 +173,40 @@ export const AppProvider = ({ children }) => {
         initializeAuth();
     }, []);
 
-    let login = (userData) => {
+    const login = (userData) => {
         setUser(userData);
     };
 
-    let logout = () => {
+    const logout = () => {
         setUser(null);
         localStorage.removeItem('authToken');
     };
 
-    let addOrganization = (org) => {
-        let newOrg = { ...org, id: `org${Date.now()}`, verified: false, elections: [] };
+    const addOrganization = (org) => {
+        const newOrg = { ...org, id: `org${Date.now()}`, verified: false, elections: [] };
         setOrganizations((prev) => [...prev, newOrg]);
         return newOrg;
     };
 
-    let addElection = (election) => {
-        let newElection = { ...election, id: `election${Date.now()}`, totalVotes: 0 };
+    const addElection = (election) => {
+        const newElection = { ...election, id: `election${Date.now()}`, totalVotes: 0 };
         setElections((prev) => [...prev, newElection]);
         return newElection;
     };
 
-    let addCandidate = (candidate) => {
-        let newCandidate = { ...candidate, id: `candidate${Date.now()}`, votes: 0 };
+    const addCandidate = (candidate) => {
+        const newCandidate = { ...candidate, id: `candidate${Date.now()}`, votes: 0 };
         setCandidates((prev) => [...prev, newCandidate]);
         return newCandidate;
     };
 
-    let castVote = (electionId, candidateId, voterId) => {
-        let existingVote = votes.find((v) => v.electionId === electionId && v.voterId === voterId);
+    const castVote = (electionId, candidateId, voterId) => {
+        const existingVote = votes.find((v) => v.electionId === electionId && v.voterId === voterId);
         if (existingVote) {
             return { success: false, message: 'You have already voted in this election' };
         }
 
-        let newVote = {
+        const newVote = {
             id: `vote${Date.now()}`,
             electionId,
             candidateId,
@@ -222,8 +222,8 @@ export const AppProvider = ({ children }) => {
         return { success: true, message: 'Vote cast successfully' };
     };
 
-    let addNotification = (notification) => {
-        let newNotification = {
+    const addNotification = (notification) => {
+        const newNotification = {
             id: `notif${Date.now()}`,
             ...notification,
             timestamp: new Date().toISOString(),
@@ -231,7 +231,7 @@ export const AppProvider = ({ children }) => {
         setNotifications((prev) => [newNotification, ...prev]);
     };
 
-    let value = {
+    const value = {
         user,
         isLoading,
         organizations,

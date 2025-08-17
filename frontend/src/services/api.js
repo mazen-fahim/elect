@@ -45,6 +45,14 @@ const apiRequest = async (endpoint, options = {}) => {
       } else if (response.status === 403) {
         if (errorData.detail === 'err.login.inactive' || errorData.error_message === 'User is inactive') {
           errorMessage = 'Your account is inactive. Please verify your email or contact support.';
+        } else if (errorData.detail && errorData.detail.includes('pending approval')) {
+          errorMessage = errorData.detail;
+        } else if (errorData.detail && errorData.detail.includes('has been rejected')) {
+          errorMessage = errorData.detail;
+        } else if (errorData.detail && errorData.detail.includes('Please wait for admin acceptance')) {
+          errorMessage = errorData.detail;
+        } else if (errorData.detail && errorData.detail.includes('has been rejected by the admin')) {
+          errorMessage = errorData.detail;
         } else {
           errorMessage = 'Access denied. You do not have permission to access this resource.';
         }
@@ -88,6 +96,10 @@ const authApi = {
     });
   },
 
+  getCurrentUser: async () => {
+    return apiRequest('/auth/me');
+  },
+
   forgotPassword: async (email) => {
     return apiRequest('/auth/forgot-password', {
       method: 'POST',
@@ -95,15 +107,34 @@ const authApi = {
     });
   },
 
-  resetPassword: async (token, passwords) => {
-    return apiRequest(`/auth/reset-password?token=${token}`, {
+  resetPassword: async (token, newPassword) => {
+    return apiRequest('/auth/reset-password', {
       method: 'POST',
-      body: JSON.stringify(passwords),
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+  },
+};
+
+// Public API functions that don't require authentication
+const publicApi = {
+  getHomeStats: async () => {
+    return apiRequest('/home/', {
+      method: 'GET',
     });
   },
 
-  getCurrentUser: async () => {
-    return apiRequest('/auth/me');
+  getPublicElections: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString ? `/home/elections?${queryString}` : '/home/elections';
+    return apiRequest(endpoint);
+  },
+
+  getFilterOptions: async () => {
+    return apiRequest('/home/filter-options');
   },
 };
 
@@ -296,6 +327,10 @@ const notificationApi = {
 
 // System Admin endpoints (admin-only)
 const systemAdminApi = {
+  getDashboardStats: async () => {
+    return apiRequest('/SystemAdmin/dashboard/stats');
+  },
+
   listActiveElections: async (params = {}) => {
     const queryString = new URLSearchParams(
       Object.fromEntries(
@@ -326,6 +361,38 @@ const systemAdminApi = {
 
   deleteOrganization: async (organizationUserId) => {
     return apiRequest(`/SystemAdmin/organizations/${organizationUserId}`, { method: 'DELETE' });
+  },
+
+  updateOrganizationStatus: async (organizationUserId, status) => {
+    return apiRequest(`/SystemAdmin/organizations/${organizationUserId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  // Organization Admin Management
+  getOrganizationAdmins: async (organizationUserId) => {
+    return apiRequest(`/SystemAdmin/organizations/${organizationUserId}/admins`);
+  },
+
+  createOrganizationAdmin: async (organizationUserId, adminData) => {
+    return apiRequest(`/SystemAdmin/organizations/${organizationUserId}/admins`, {
+      method: 'POST',
+      body: JSON.stringify(adminData),
+    });
+  },
+
+  updateOrganizationAdmin: async (organizationUserId, adminUserId, adminData) => {
+    return apiRequest(`/SystemAdmin/organizations/${organizationUserId}/admins/${adminUserId}`, {
+      method: 'PUT',
+      body: JSON.stringify(adminData),
+    });
+  },
+
+  deleteOrganizationAdmin: async (organizationUserId, adminUserId) => {
+    return apiRequest(`/SystemAdmin/organizations/${organizationUserId}/admins/${adminUserId}`, {
+      method: 'DELETE',
+    });
   },
 
   organizationsActivity: async (params = {}) => {
@@ -362,8 +429,9 @@ const api = {
   candidate: candidateApi,
   notification: notificationApi,
   systemAdmin: systemAdminApi,
+  public: publicApi, // Add publicApi to the default export
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi };
 
