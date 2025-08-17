@@ -21,8 +21,8 @@ class RegisterOrganizationRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    first_name: str
-    last_name: str
+    first_name: str | None = None
+    last_name: str | None = None
     country: Country
     address: str | None = None
     description: str | None = None
@@ -35,7 +35,7 @@ class RegisterOrganizationRequest(BaseModel):
         return v
 
     class config:
-        use_enum_values: bool = True
+        use_enum_values: True
 
 
 class FieldNames(enum.Enum):

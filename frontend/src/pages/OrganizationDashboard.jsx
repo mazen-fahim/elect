@@ -152,7 +152,18 @@ let OrganizationDashboard = () => {
                 
             } catch (error) {
                 console.error('Error creating election:', error);
-                showModal('Error', 'Failed to create election. Please try again.', 'error');
+                console.error('Full error object:', error);
+                console.error('Error response:', error.response);
+                console.error('Error message:', error.message);
+                
+                let errorMessage = 'Failed to create election. Please try again.';
+                if (error.message && error.message !== 'Server error. Please try again later.') {
+                    errorMessage = error.message;
+                } else if (error.response && error.response.detail) {
+                    errorMessage = error.response.detail;
+                }
+                
+                showModal('Error', errorMessage, 'error');
             }
         };
 
@@ -184,7 +195,18 @@ let OrganizationDashboard = () => {
                 
             } catch (error) {
                 console.error('Error creating election with CSV:', error);
-                showModal('Error', 'Failed to create election. Please check your CSV files and try again.', 'error');
+                console.error('Full error object:', error);
+                console.error('Error response:', error.response);
+                console.error('Error message:', error.message);
+                
+                let errorMessage = 'Failed to create election. Please check your CSV files and try again.';
+                if (error.message && error.message !== 'Server error. Please try again later.') {
+                    errorMessage = error.message;
+                } else if (error.response && error.response.detail) {
+                    errorMessage = error.response.detail;
+                }
+                
+                showModal('Error', errorMessage, 'error');
             }
         };
 

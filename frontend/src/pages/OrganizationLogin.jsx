@@ -55,15 +55,31 @@ let OrganizationLogin = () => {
             // Navigate to appropriate dashboard based on role and organization
             if (userInfo.role === 'organization' && userInfo.organization_id) {
                 navigate(`/org/${userInfo.organization_id}/dashboard`);
+            } else if (userInfo.role === 'organization_admin' && userInfo.organization_id) {
+                navigate(`/org/${userInfo.organization_id}/dashboard`);
             } else if (userInfo.role === 'admin') {
-                navigate('/admin');
+                navigate('/SystemAdmin');
             } else {
                 navigate('/dashboard'); // fallback
             }
             
         } catch (error) {
             console.error('Login error:', error);
-            setError(error.message || 'Login failed. Please check your credentials.');
+            
+            // Handle specific errors for organization status
+            if (error.message && error.message.includes('pending approval')) {
+                setError('Your organization registration is pending approval. Please wait for admin acceptance before logging in.');
+            } else if (error.message && error.message.includes('Please wait for admin acceptance')) {
+                setError('Your organization registration is pending approval. Please wait for admin acceptance before logging in.');
+            } else if (error.message && error.message.includes('has been rejected')) {
+                setError('Your organization has been rejected by the admin. Please contact support for assistance.');
+            } else if (error.message && error.message.includes('rejected by the admin')) {
+                setError('Your organization has been rejected by the admin. Please contact support for assistance.');
+            } else if (error.message && error.message.includes('currently pending approval')) {
+                setError('Your organization registration is pending approval. Please wait for admin acceptance before logging in.');
+            } else {
+                setError(error.message || 'Login failed. Please check your credentials.');
+            }
         }
     };
 
@@ -74,8 +90,8 @@ let OrganizationLogin = () => {
             <div className="max-w-md w-full space-y-8">
                 <div className="text-center">
                     <LogIn className="mx-auto h-12 w-12 text-blue-600" />
-                    <h2 className="mt-6 text-3xl font-bold text-gray-900">Organization Login</h2>
-                    <p className="mt-2 text-sm text-gray-600">Sign in to manage your elections</p>
+                    <h2 className="mt-6 text-3xl font-bold text-gray-900">Login</h2>
+                    <p className="mt-2 text-sm text-gray-600">Sign in to access your account</p>
                 </div>
 
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-200/50 p-8">
@@ -99,7 +115,7 @@ let OrganizationLogin = () => {
                                 value={formData.email}
                                 onChange={handleChange}
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="your-org@example.com"
+                                placeholder="your-email@example.com"
                             />
                         </div>
 

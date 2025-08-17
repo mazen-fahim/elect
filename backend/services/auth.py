@@ -62,23 +62,6 @@ class AuthService:
         if not user or not AuthService.verify_password(password, user.password):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="err.login.credentials")
         
-        # Check if user is an organization and if their registration is still pending or rejected
-        if user.role == UserRole.organization:
-            org_result = await self.db.execute(select(Organization).where(Organization.user_id == user.id))
-            organization = org_result.scalar_one_or_none()
-            
-            if organization:
-                if organization.status == "pending":
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, 
-                        detail="Your organization registration is currently pending approval. Please wait for admin acceptance before logging in."
-                    )
-                elif organization.status == "rejected":
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, 
-                        detail="Your organization registration has been rejected. Please contact support for assistance or reapply."
-                    )
-        
         return user
 
     async def register_organization(self, org_data: RegisterOrganizationRequest) -> Organization:

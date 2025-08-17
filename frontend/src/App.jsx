@@ -7,6 +7,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import OrganizationDashboard from './pages/OrganizationDashboard';
 import OrganizationRegistration from './pages/OrganizationRegistration';
 import OrganizationLogin from './pages/OrganizationLogin';
+import PublicElections from './pages/PublicElections';
 import VoterExperience from './pages/VoterExperience';
 import ElectionResults from './pages/ElectionResults';
 
@@ -24,7 +25,7 @@ function App() {
                     <Route path="/org/:id/dashboard" element={<OrganizationDashboard />} />
                     <Route path="/login/org" element={<OrganizationLogin />} />
                     <Route path="/register" element={<OrganizationRegistration />} />
-                    <Route path="/elections" element={<VoterExperience />} />
+                    <Route path="/elections" element={<PublicElections />} />
                     <Route path="/results/:electionId" element={<ElectionResults />} />
 
                 </Routes>
