@@ -430,8 +430,69 @@ const api = {
   notification: notificationApi,
   systemAdmin: systemAdminApi,
   public: publicApi, // Add publicApi to the default export
+  // voterApi will be appended below after its declaration
 };
 
 export default api;
 export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi };
+
+// Voter OTP endpoints (query-param based)
+const voterApi = {
+  requestOtp: async ({ electionId, phoneNumber, voterHashedNationalId, nationalId, email, id }) => {
+    const params = new URLSearchParams();
+    if (typeof electionId === 'number' || (typeof electionId === 'string' && electionId)) {
+      params.set('election_id', String(electionId));
+    }
+    if (phoneNumber) params.set('phone_number', phoneNumber);
+    if (voterHashedNationalId) params.set('voter_hashed_national_id', voterHashedNationalId);
+    if (nationalId) params.set('national_id', nationalId);
+    if (email) params.set('email', email);
+    if (id) params.set('id', id);
+    const endpoint = `/voters/login/request-otp?${params.toString()}`;
+    // POST with no body; FastAPI reads query params
+    return apiRequest(endpoint, { method: 'POST' });
+  },
+
+  verifyOtp: async ({ electionId, otpCode, voterHashedNationalId, nationalId, email, id }) => {
+    const params = new URLSearchParams();
+    if (typeof electionId === 'number' || (typeof electionId === 'string' && electionId)) {
+      params.set('election_id', String(electionId));
+    }
+    if (otpCode) params.set('otp_code', otpCode);
+    if (voterHashedNationalId) params.set('voter_hashed_national_id', voterHashedNationalId);
+    if (nationalId) params.set('national_id', nationalId);
+    if (email) params.set('email', email);
+    if (id) params.set('id', id);
+    const endpoint = `/voters/login/verify-otp?${params.toString()}`;
+    return apiRequest(endpoint, { method: 'POST' });
+  },
+};
+
+// Attach to default export for convenience
+api.voter = voterApi;
+
+// Named export
+export { voterApi };
+
+// Voting process endpoints
+const votingProcessApi = {
+  create: async ({ voterHashedNationalId, electionId }) => {
+    return apiRequest('/voting-processes/', {
+      method: 'POST',
+      body: JSON.stringify({
+        voter_hashed_national_id: voterHashedNationalId,
+        election_id: electionId,
+      }),
+    });
+  },
+  get: async ({ voterHashedNationalId, electionId }) => {
+    const params = new URLSearchParams({
+      election_id: String(electionId),
+    }).toString();
+    return apiRequest(`/voting-processes/${voterHashedNationalId}?${params}`);
+  },
+};
+
+api.votingProcess = votingProcessApi;
+export { votingProcessApi };
 
