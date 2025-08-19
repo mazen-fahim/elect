@@ -143,8 +143,7 @@ def upgrade() -> None:
     sa.Column('last_verified_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('election_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['election_id'], ['elections.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('voter_hashed_national_id'),
-    sa.UniqueConstraint('phone_number')
+    sa.PrimaryKeyConstraint('voter_hashed_national_id', 'election_id')
     )
     op.create_table('voting_processes',
     sa.Column('voter_hashed_national_id', sa.String(length=200), nullable=False),

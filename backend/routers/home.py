@@ -39,6 +39,7 @@ class PublicElection(BaseModel):
     ends_at: datetime
     total_vote_count: int
     number_of_candidates: int
+    potential_number_of_voters: int
     organization_name: str
     organization_country: str
     status: ElectionStatus
@@ -76,8 +77,7 @@ async def get_public_elections(
     limit: int = Query(12, ge=1, le=50, description="Items per page"),
 ):
     """Get public elections with search, filtering, and pagination for visitors"""
-
-    # Calculate offset
+    now = datetime.now(timezone.utc)
     offset = (page - 1) * limit
 
     # Base query joining elections with organizations
@@ -89,6 +89,7 @@ async def get_public_elections(
         Election.ends_at,
         Election.total_vote_count,
         Election.number_of_candidates,
+        Election.potential_number_of_voters,
         Organization.name.label("organization_name"),
         Organization.country.label("organization_country"),
     ).join(Organization, Election.organization_id == Organization.user_id)
@@ -159,6 +160,7 @@ async def get_public_elections(
                 ends_at=election_data.ends_at,
                 total_vote_count=election_data.total_vote_count,
                 number_of_candidates=election_data.number_of_candidates,
+                potential_number_of_voters=election_data.potential_number_of_voters,
                 organization_name=election_data.organization_name,
                 organization_country=(
                     election_data.organization_country.value
