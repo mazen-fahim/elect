@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, Field
 
 
 class Settings(BaseSettings):
@@ -35,10 +35,16 @@ class Settings(BaseSettings):
     CLOUDINARY_CLOUD_NAME: str
     CLOUDINARY_API_KEY: str
     CLOUDINARY_API_SECRET: str
+    
+    # Twilio Configuration
+    TWILIO_ACCOUNT_SID: str = Field(..., env="TWILIO_ACCOUNT_SID")
+    TWILIO_AUTH_TOKEN: str = Field(..., env="TWILIO_AUTH_TOKEN")
+    TWILIO_PHONE_NUMBER: str = Field(..., env="TWILIO_PHONE_NUMBER")
 
     class Config:
         env_file = "../../.env.example"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # Ignore extra env vars
 
 
 settings = Settings()

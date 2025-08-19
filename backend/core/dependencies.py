@@ -1,6 +1,9 @@
 from types import SimpleNamespace
 from typing import Annotated
-
+from twilio.rest import Client
+import os
+from twilio.http.async_http_client import AsyncTwilioHttpClient
+from twilio.http import TwilioHttpClient
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.future import select
@@ -85,3 +88,23 @@ def get_client_ip(request: Request):
 
 
 client_ip_dependency = Annotated[str | None, Depends(get_client_ip)]
+
+
+async def get_twilio_client():
+    """
+    Dependency that provides a configured Twilio async client
+    """
+    # No need for os.getenv() since pydantic already loaded from .env
+    if not all([settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN, settings.TWILIO_PHONE_NUMBER]):
+        raise RuntimeError("Twilio credentials not properly configured")
+
+    client = Client(
+        settings.TWILIO_ACCOUNT_SID,
+        settings.TWILIO_AUTH_TOKEN,
+        http_client=AsyncTwilioHttpClient()
+    )
+    
+    try:
+        yield client
+    finally:
+        await client.http_client.session.close()     
