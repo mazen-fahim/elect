@@ -11,20 +11,20 @@ const PublicElections = () => {
     electionTypes: [],
     organizations: []
   });
-  
+
   // Search and filter state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [organizationFilter, setOrganizationFilter] = useState('');
   const [countryFilter, setCountryFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElections, setTotalElections] = useState(0);
   const [itemsPerPage] = useState(12);
-  
+
   // UI state
   const [showFilters, setShowFilters] = useState(false);
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
@@ -143,25 +143,31 @@ const PublicElections = () => {
           <h3 className="text-lg font-semibold text-gray-900 line-clamp-2">{election.title}</h3>
           {getStatusBadge(election.status)}
         </div>
-        
+
         <p className="text-gray-600 text-sm mb-4 line-clamp-3">{election.description}</p>
-        
+
         <div className="space-y-3 mb-4">
           <div className="flex items-center text-sm text-gray-500">
             <Users className="h-4 w-4 mr-2" />
             <span>{election.organization_name}</span>
           </div>
-          
+
           <div className="flex items-center text-sm text-gray-500">
             <MapPin className="h-4 w-4 mr-2" />
             <span>{election.organization_country}</span>
           </div>
-          
+
           <div className="flex items-center text-sm text-gray-500">
             <Vote className="h-4 w-4 mr-2" />
             <span>{election.number_of_candidates} candidates</span>
           </div>
-          
+          {typeof election.potential_number_of_voters === 'number' && (
+            <div className="flex items-center text-sm text-gray-500">
+              <Users className="h-4 w-4 mr-2" />
+              <span>Potential voters: {election.potential_number_of_voters.toLocaleString()}</span>
+            </div>
+          )}
+
           {election.status === 'finished' && (
             <div className="flex items-center text-sm text-gray-500">
               <Vote className="h-4 w-4 mr-2" />
@@ -169,19 +175,19 @@ const PublicElections = () => {
             </div>
           )}
         </div>
-        
+
         <div className="border-t border-gray-100 pt-4">
           <div className="text-xs text-gray-500 mb-2">Election Period</div>
           <div className="text-sm text-gray-700">
             {formatDate(election.starts_at)} - {formatDate(election.ends_at)}
           </div>
         </div>
-        
+
         <div className="mt-4 flex justify-between items-center">
           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
             {election.types}
           </span>
-          
+
           {election.status === 'running' ? (
             <Link
               to={`/vote/${election.id}`}
@@ -248,11 +254,10 @@ const PublicElections = () => {
           <button
             key={page}
             onClick={() => setCurrentPage(page)}
-            className={`px-3 py-2 rounded-lg border ${
-              page === currentPage
+            className={`px-3 py-2 rounded-lg border ${page === currentPage
                 ? 'bg-blue-600 text-white border-blue-600'
                 : 'border-gray-300 hover:bg-gray-50'
-            }`}
+              }`}
           >
             {page}
           </button>
