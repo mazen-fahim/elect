@@ -1,14 +1,17 @@
 from datetime import datetime, timedelta, timezone
 import random
+import os
+from twilio.rest import Client
 import hashlib
-
-from fastapi import APIRouter, HTTPException, status
+import logging
+from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from core.dependencies import db_dependency
+from core.dependencies import db_dependency, get_twilio_client
 from models.voter import Voter
-
+from twilio.http.async_http_client import AsyncTwilioHttpClient  # Add this import
 from schemas.voter import VoterCreate, VoterOut, VoterUpdate
 
 router = APIRouter(prefix="/voters", tags=["voters"])
@@ -234,3 +237,224 @@ async def verify_voter_otp(
 
     voter.election_title = voter.election.title
     return voter
+
+
+
+
+# Initialize logger
+logger = logging.getLogger(__name__)
+
+@router.post("/login/request-otp",
+    response_model=Dict[str, Any],
+    responses={
+        200: {"description": "OTP processed successfully"},
+        400: {"description": "Invalid request parameters"},
+        429: {"description": "Too many OTP requests"},
+        500: {"description": "Internal server error"}
+    }
+)
+async def request_voter_otp(
+    election_id: int,
+    phone_number: str,
+    db: db_dependency,
+    twilio_client: Client = Depends(get_twilio_client),  # Proper dependency injection
+    voter_hashed_national_id: str | None = None,
+    national_id: str | None = None,
+    email: str | None = None,
+    id: str | None = None,
+):
+    """
+    Request OTP for voter login with improved security and consistency.
+    """
+    # Validate phone number format
+    if not (phone_number.startswith('+') and phone_number[1:].isdigit() and len(phone_number) > 8):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Phone number must be in valid E.164 format"
+        )
+
+    # Resolve voter identifier
+    try:
+        if not voter_hashed_national_id:
+            if national_id:
+                voter_hashed_national_id = _hash_identifier(national_id)
+            elif email:
+                voter_hashed_national_id = _hash_identifier(email)
+            elif id:
+                voter_hashed_national_id = id if len(id) >= 32 else _hash_identifier(id)
+            else:
+                raise ValueError("Missing voter identifier")
+    except Exception as e:
+        logger.warning(f"Invalid voter identifier: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid voter identifier"
+        )
+
+    # Database operations
+    async with db.begin():
+        try:
+            result = await db.execute(
+                select(Voter).where(
+                    Voter.voter_hashed_national_id == voter_hashed_national_id, 
+                    Voter.election_id == election_id
+                )
+            )
+            voter = result.scalar_one_or_none()
+            
+            if not voter:
+                voter = Voter(
+                    voter_hashed_national_id=voter_hashed_national_id, 
+                    phone_number=phone_number, 
+                    election_id=election_id
+                )
+                db.add(voter)
+            else:
+                # Rate limiting: 3 minutes between OTP requests
+                if voter.otp_code and voter.otp_expires_at > datetime.now(timezone.utc):
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Please wait before requesting a new OTP"
+                    )
+                voter.phone_number = phone_number
+                voter.is_verified = False
+
+            # Generate 6-digit OTP
+            code = f"{random.randint(100000, 999999)}"
+            voter.otp_code = code
+            voter.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=3)
+            await db.commit()
+            logger.info(f"OTP generated for {voter_hashed_national_id[:8]}...")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Database error: {str(e)}")
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to process OTP request"
+            )
+
+    # Send SMS
+    sms_status = {"status": "not_attempted"}
+    try:
+        message = await twilio_client.messages.create_async(
+            body=f"Your voting OTP is {code}. Valid for 3 minutes.",
+            from_=os.getenv("TWILIO_PHONE_NUMBER"),
+            to=phone_number
+        )
+        sms_status = {
+            "status": message.status,
+            "sid": message.sid,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        logger.info(f"SMS sent to {phone_number}")
+    except Exception as e:
+        logger.error(f"SMS failed to {phone_number}: {str(e)}")
+        sms_status = {
+            "status": "failed",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+    return {
+        "message": "OTP generated successfully",
+        "expires_in_minutes": 3,
+        "sms_status": sms_status
+    }
+
+@router.post("/login/verify-otp",
+    response_model=VoterOut,
+    responses={
+        200: {"description": "OTP verified successfully"},
+        400: {"description": "Invalid/expired OTP"},
+        404: {"description": "Voter not found"},
+        500: {"description": "Internal server error"}
+    }
+)
+async def verify_voter_otp(
+    election_id: int,
+    otp_code: str,
+    db: db_dependency,
+    voter_hashed_national_id: str | None = None,
+    national_id: str | None = None,
+    email: str | None = None,
+    id: str | None = None,
+):
+    """Verify OTP with enhanced security checks."""
+    # Input validation
+    if not otp_code or len(otp_code) != 6 or not otp_code.isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="OTP must be 6 digits"
+        )
+
+    # Resolve identifier
+    try:
+        if not voter_hashed_national_id:
+            if national_id:
+                voter_hashed_national_id = _hash_identifier(national_id)
+            elif email:
+                voter_hashed_national_id = _hash_identifier(email)
+            elif id:
+                voter_hashed_national_id = id if len(id) >= 32 else _hash_identifier(id)
+            else:
+                raise ValueError("Missing voter identifier")
+    except Exception as e:
+        logger.warning(f"Invalid identifier: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid voter identifier"
+        )
+
+    # Get voter record
+    try:
+        result = await db.execute(
+            select(Voter)
+            .where(
+                Voter.voter_hashed_national_id == voter_hashed_national_id,
+                Voter.election_id == election_id
+            )
+            .options(selectinload(Voter.election))
+        )
+        voter = result.scalar_one_or_none()
+        
+        if not voter:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Voter not found"
+            )
+
+        # OTP validation
+        current_time = datetime.now(timezone.utc)
+        if (not voter.otp_code or 
+            not voter.otp_expires_at or 
+            voter.otp_expires_at < current_time or
+            voter.otp_code != otp_code):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired OTP"
+            )
+
+        # Verification update
+        voter.is_verified = True
+        voter.last_verified_at = current_time
+        voter.otp_code = None
+        voter.otp_expires_at = None
+        await db.commit()
+        await db.refresh(voter)
+        
+        # Add election info to response
+        voter.election_title = voter.election.title
+        return voter
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Verification failed: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Verification process failed"
+        )
