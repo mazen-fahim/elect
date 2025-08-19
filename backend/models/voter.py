@@ -15,7 +15,7 @@ class Voter(Base):
 
     voter_hashed_national_id: Mapped[str] = mapped_column(String(200), primary_key=True)
 
-    phone_number: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    phone_number: Mapped[str] = mapped_column(String(20), nullable=False, unique=False)
 
     governerate: Mapped[str] = mapped_column(String(100), nullable=True)
 
@@ -26,7 +26,7 @@ class Voter(Base):
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Foreign Keys
-    election_id: Mapped[int] = mapped_column(Integer, ForeignKey("elections.id", ondelete="CASCADE"))
+    election_id: Mapped[int] = mapped_column(Integer, ForeignKey("elections.id", ondelete="CASCADE"), primary_key=True)
 
     # Relationships
     election: Mapped["Election"] = relationship("Election", back_populates="voters")
