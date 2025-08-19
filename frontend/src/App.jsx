@@ -10,6 +10,7 @@ import OrganizationLogin from './pages/OrganizationLogin';
 import PublicElections from './pages/PublicElections';
 import VoterExperience from './pages/VoterExperience';
 import ElectionResults from './pages/ElectionResults';
+import VoterLogin from './pages/VoterLogin';
 
 
 
@@ -26,6 +27,7 @@ function App() {
                     <Route path="/login/org" element={<OrganizationLogin />} />
                     <Route path="/register" element={<OrganizationRegistration />} />
                     <Route path="/elections" element={<PublicElections />} />
+                    <Route path="/vote/:electionId" element={<VoterLogin />} />
                     <Route path="/results/:electionId" element={<ElectionResults />} />
 
                 </Routes>
