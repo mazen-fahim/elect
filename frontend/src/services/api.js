@@ -136,6 +136,11 @@ const publicApi = {
   getFilterOptions: async () => {
     return apiRequest('/home/filter-options');
   },
+  getPublicElectionById: async (id) => {
+    // reuse public list endpoint and filter client-side if needed; ideally, backend should expose a single-election public endpoint
+    const res = await apiRequest(`/home/elections?limit=1&page=1`);
+    return res; // placeholder, not used directly
+  },
 };
 
 const organizationApi = {
@@ -232,6 +237,22 @@ const electionApi = {
     return apiRequest(`/election/${id}`, {
       method: 'DELETE',
     });
+  },
+};
+const voterApi = {
+  requestOtp: async ({ electionId, phoneNumber, nationalId }) => {
+    const params = new URLSearchParams();
+    params.append('election_id', electionId);
+    params.append('phone_number', phoneNumber);
+    if (nationalId) params.append('national_id', nationalId);
+    return apiRequest(`/voters/login/request-otp?${params.toString()}`, { method: 'POST' });
+  },
+  verifyOtp: async ({ electionId, code, nationalId }) => {
+    const params = new URLSearchParams();
+    params.append('election_id', electionId);
+    params.append('code', code);
+    if (nationalId) params.append('national_id', nationalId);
+    return apiRequest(`/voters/login/verify-otp?${params.toString()}`, { method: 'POST' });
   },
 };
 
@@ -430,8 +451,9 @@ const api = {
   notification: notificationApi,
   systemAdmin: systemAdminApi,
   public: publicApi, // Add publicApi to the default export
+  voter: voterApi,
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi };
 
