@@ -9,6 +9,7 @@ from .approval import router as approval
 from .voter import router as voter
 from .voting_process import router as voting_process
 from .home import router as home
+from .payment import router as payment
 
 __all__ = [
     "auth",
@@ -22,4 +23,5 @@ __all__ = [
     "voter",
     "voting_process",
     "home",
+    "payment",
 ]

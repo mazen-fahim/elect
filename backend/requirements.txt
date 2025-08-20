@@ -45,3 +45,4 @@ tzdata==2025.2
 urllib3==2.5.0
 uvicorn==0.35.0
 twilio==8.10.0
+stripe==10.10.0

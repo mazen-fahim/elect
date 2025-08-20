@@ -1,5 +1,4 @@
 from pydantic_settings import BaseSettings
-from pydantic import Field
 
 
 class Settings(BaseSettings):
@@ -41,6 +40,11 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str
     TWILIO_AUTH_TOKEN: str
     TWILIO_PHONE_NUMBER: str
+
+    # Stripe and URLs (optional but used by payment router)
+    STRIPE_SECRET_KEY: str | None = None
+    APP_HOST: str = "http://localhost:5173"
+    SERVER_DOMAIN: str = "http://localhost:8000"
 
     class Config:
         extra = "ignore"  # Ignore extra env vars
