@@ -6,11 +6,13 @@ import logging
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, status, Depends
 from sqlalchemy.future import select
+from sqlalchemy import and_
 from sqlalchemy.orm import selectinload
 
 from core.dependencies import db_dependency, get_twilio_client
 from core.settings import settings
 from models.voter import Voter
+from models.voting_process import VotingProcess
 from twilio.http.async_http_client import AsyncTwilioHttpClient  # Add this import
 from schemas.voter import VoterCreate, VoterOut, VoterUpdate
 
@@ -184,29 +186,25 @@ logger = logging.getLogger(__name__)
     responses={
         200: {"description": "OTP processed successfully"},
         400: {"description": "Invalid request parameters"},
+        404: {"description": "Voter not found for this election"},
         429: {"description": "Too many OTP requests"},
         500: {"description": "Internal server errorrrrrrr"},
     },
 )
 async def request_voter_otp(
     election_id: int,
-    phone_number: str,
     db: db_dependency,
     twilio_client: Client = Depends(get_twilio_client),  # Proper dependency injection
     voter_hashed_national_id: str | None = None,
     national_id: str | None = None,
     email: str | None = None,
     id: str | None = None,
+
 ):
     """
     Request OTP for voter login with improved security and consistency.
+    Voter must already exist in the election's voter list to receive an OTP.
     """
-    # Validate phone number format
-    if not (phone_number.startswith("+") and phone_number[1:].isdigit() and len(phone_number) > 8):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Phone number must be in valid E.164 format"
-        )
-
     # Resolve voter identifier
     voter_hashed_id = _resolve_voter_identifier(
         voter_hashed_national_id, national_id, email, id
@@ -223,19 +221,20 @@ async def request_voter_otp(
         voter = result.scalar_one_or_none()
 
         if not voter:
-            voter = Voter(
-                voter_hashed_national_id=voter_hashed_id,
-                phone_number=phone_number,
-                election_id=election_id,
+            # Voter not found - they are not allowed to vote in this election
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="You are not allowed to vote on this election. Please contact your organization administrator."
             )
-            db.add(voter)
         else:
+            # Voter exists, use stored phone number
+            phone_number = voter.phone_number
+            
             # Rate limiting: 3 minutes between OTP requests
             if voter.otp_code and voter.otp_expires_at and voter.otp_expires_at > datetime.now(timezone.utc):
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Please wait before requesting a new OTP"
                 )
-            voter.phone_number = phone_number
             voter.is_verified = False  # Reset verification status on new OTP request
 
         # Generate 6-digit OTP and set expiry
@@ -314,6 +313,27 @@ async def verify_voter_otp(
     if voter.otp_code != code:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP code")
 
+    # Store values before commit to avoid expired ORM object issues
+    voter_hashed_id = voter.voter_hashed_national_id
+    election_id_value = voter.election_id
+    
+    # Check if voter has already voted in this election
+    existing_vote_result = await db.execute(
+        select(VotingProcess).where(
+            and_(
+                VotingProcess.voter_hashed_national_id == voter_hashed_id,
+                VotingProcess.election_id == election_id_value
+            )
+        )
+    )
+    
+    if existing_vote_result.scalar_one_or_none():
+        # Voter has already voted, don't mark as verified
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You have already cast your vote on this election"
+        )
+    
     # Mark verified and clear OTP fields
     voter.is_verified = True
     voter.last_verified_at = now
@@ -324,6 +344,7 @@ async def verify_voter_otp(
 
     return {
         "message": "OTP verified successfully",
-        "voter_hashed_national_id": voter.voter_hashed_national_id,
-        "election_id": voter.election_id,
+        "voter_hashed_national_id": voter_hashed_id,
+        "election_id": election_id_value,
+        "redirect_to_voting": True
     }
