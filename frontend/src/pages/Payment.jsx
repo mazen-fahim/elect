@@ -16,6 +16,7 @@ const Payment = () => {
   const [productName, setProductName] = useState('Wallet Top-up');
   const [purpose, setPurpose] = useState('');
   const [isLocked, setIsLocked] = useState(false);
+  const [votersCount, setVotersCount] = useState(null);
   const [maxAmount, setMaxAmount] = useState(null);
   const [minEgp, setMinEgp] = useState(DEFAULT_MIN_EGP);
   const [autoTriggered, setAutoTriggered] = useState(false);
@@ -64,6 +65,7 @@ const Payment = () => {
           if (initAmount < minEgp) initAmount = minEgp;
           setAmountEgp(String(initAmount));
           setProductName(`Election voter capacity for ${voterNum} voters`);
+          setVotersCount(voterNum);
         } else if (a && !Number.isNaN(Number(a))) {
           const normalized = Math.max(Number(a), minEgp);
           initAmount = Number(normalized.toFixed(3));
@@ -103,12 +105,23 @@ const Payment = () => {
         navigate(`/login/org?next=${next}`, { replace: true });
         return;
       }
+  const votersNum = votersCount && !Number.isNaN(Number(votersCount)) ? Math.max(1, Number(votersCount)) : null;
   const amt = Number(amountEgp);
-  if (!amt || Number.isNaN(amt) || amt < minEgp) return;
+  if (!amt || Number.isNaN(amt) || amt <= 0) return;
       try {
         setAutoTriggered(true);
         setIsLoading(true);
-        const { url } = await paymentApi.createCheckoutSession(toPiasters(amt));
+        // Include details so Stripe shows voter count/purpose in line item
+        const payload = {
+          amount: toPiasters(amt),
+          purpose: purpose || (isLocked ? 'election-voters' : undefined),
+          voters: votersNum || undefined,
+          name: isLocked && votersNum ? `Election voter capacity (${votersNum} voters)` : productName,
+          description: isLocked && votersNum
+            ? `Voter capacity for ${votersNum} voters. Add EGP ${amt.toFixed(2)} to your e-wallet`
+            : `Add EGP ${amt.toFixed(2)} to your e-wallet`,
+        };
+        const { url } = await paymentApi.createCheckoutSession(payload);
         if (url) window.location.href = url;
         else setError('Failed to start checkout session.');
       } catch (err) {
@@ -133,12 +146,22 @@ const Payment = () => {
         return;
       }
       const amt = Number(amountEgp);
-  if (!amt || Number.isNaN(amt) || amt < minEgp) {
-        setError(`Enter at least EGP ${minEgp}.`);
+      if (!amt || Number.isNaN(amt) || amt <= 0) {
+        setError('Enter a positive amount.');
         setIsLoading(false);
         return;
       }
-      const { url } = await paymentApi.createCheckoutSession(toPiasters(amt));
+  const votersNum = votersCount && !Number.isNaN(Number(votersCount)) ? Math.max(1, Number(votersCount)) : null;
+      const payload = {
+        amount: toPiasters(amt),
+        purpose: purpose || (isLocked ? 'election-voters' : undefined),
+        voters: votersNum || undefined,
+        name: isLocked && votersNum ? `Election voter capacity (${votersNum} voters)` : productName,
+        description: isLocked && votersNum
+          ? `Voter capacity for ${votersNum} voters. Add EGP ${amt.toFixed(2)} to your e-wallet`
+          : `Add EGP ${amt.toFixed(2)} to your e-wallet`,
+      };
+      const { url } = await paymentApi.createCheckoutSession(payload);
       if (url) window.location.href = url;
       else setError('Failed to start checkout session.');
     } catch (err) {
@@ -161,7 +184,7 @@ const Payment = () => {
         <h2 className="text-xl font-semibold text-gray-900 mb-4">{productName}</h2>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Amount ({currency}) {isLocked ? <span className="ml-1 text-xs text-gray-500">(locked)</span> : <span className="ml-1 text-xs text-gray-500">(min {currency} {minEgp}{maxAmount !== null ? `, max ${currency} ${Number(maxAmount).toFixed(2)}` : ''})</span>}</label>
+            <label className="block text-sm text-gray-600 mb-1">Amount ({currency}) {isLocked ? <span className="ml-1 text-xs text-gray-500">(locked)</span> : <span className="ml-1 text-xs text-gray-500">{minEgp > 0 ? `(min ${currency} ${minEgp}${maxAmount !== null ? `, max ${currency} ${Number(maxAmount).toFixed(2)}` : ''})` : `(any positive amount${maxAmount !== null ? `, max ${currency} ${Number(maxAmount).toFixed(2)}` : ''})`}</span>}</label>
             <input
               type="number"
               min={minEgp}

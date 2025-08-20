@@ -438,10 +438,17 @@ const systemAdminApi = {
 
 // Payment endpoints
 const paymentApi = {
-  createCheckoutSession: async (amountPiasters) => {
+  createCheckoutSession: async (data) => {
+    // data can be a number (amount in piasters) or an object: { amount, name?, description?, voters?, purpose? }
+    // Ensure user is authenticated; avoid hitting backend with missing Authorization
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      throw new ApiError('Authentication required. Please log in.', 401, null);
+    }
+    const body = typeof data === 'number' ? { amount: data } : { ...data };
     return apiRequest('/payment/create-checkout-session', {
       method: 'POST',
-      body: JSON.stringify({ amount: amountPiasters }),
+      body: JSON.stringify(body),
     });
   },
   getConfig: async () => {

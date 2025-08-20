@@ -50,7 +50,7 @@ async def get_payment_config():
     key = getattr(settings, "STRIPE_SECRET_KEY", None)
     mode = "test" if key and str(key).startswith("sk_test_") else ("live" if key and str(key).startswith("sk_live_") else "test")
     # Minimum amount (in EGP) to satisfy Stripe's 200 fils requirement with buffer
-    min_egp = 30
+    min_egp = 0
     return {"mode": mode, "currency": "EGP", "product_name": "Wallet Top-up", "min_egp": min_egp}
 
 
@@ -60,14 +60,7 @@ async def create_checkout_session(
     user: user_dependency,
     db: db_dependency,
 ):
-    # Stripe requires a minimum charge that converts to at least 200 fils (2 AED).
-    # With current FX, this is roughly >= EGP 25.00. Enforce this to avoid Stripe errors.
-    MIN_EGP_PIASTERS = 3000  # 30 EGP
-    if checkout_data.amount < MIN_EGP_PIASTERS:
-        raise HTTPException(
-            status_code=400,
-            detail="Amount too low. Minimum is EGP 30.00 to satisfy Stripe currency limits.",
-        )
+    # Allow any positive amount; Stripe will validate currency-specific minimums.
 
     api_key = _require_stripe_key()
     stripe.api_key = api_key
@@ -77,6 +70,27 @@ async def create_checkout_session(
         success_url = f"{settings.SERVER_DOMAIN}/api/payment/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{settings.APP_HOST}/org/payment/cancel"
 
+        # Build product details from payload so voter count/purpose appear in Checkout
+        voters = getattr(checkout_data, "voters", None)
+        purpose = getattr(checkout_data, "purpose", None)
+        product_name = (
+            checkout_data.name
+            or (f"Election voter capacity ({voters} voters)" if purpose == "election-voters" and voters else "Wallet Top-up")
+        )
+        product_description = (
+            checkout_data.description
+            or (
+                f"Voter capacity for {voters} voters. " if purpose == "election-voters" and voters else ""
+            )
+            + f"Add EGP {checkout_data.amount / 100:.2f} to your e-wallet"
+        )
+
+        metadata = {"user_id": str(user.id)}
+        if voters:
+            metadata["voters"] = str(voters)
+        if purpose:
+            metadata["purpose"] = str(purpose)
+
         checkout_session = stripe.checkout.Session.create(
             line_items=[
                 {
@@ -84,8 +98,8 @@ async def create_checkout_session(
                         "currency": "egp",
                         "unit_amount": checkout_data.amount,  # (100 = 1 EGP)
                         "product_data": {
-                            "name": "Wallet Top-up",
-                            "description": f"Add EGP {checkout_data.amount / 100:.2f} to your e-wallet",
+                            "name": product_name,
+                            "description": product_description,
                         },
                     },
                     "quantity": 1,
@@ -94,7 +108,7 @@ async def create_checkout_session(
             mode="payment",
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata={"user_id": str(user.id)},
+            metadata=metadata,
         )
 
         user.stripe_session_id = checkout_session.id
