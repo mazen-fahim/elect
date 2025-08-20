@@ -591,35 +591,6 @@ let OrganizationDashboard = () => {
 
         return (
             <div className="space-y-6">
-                {/* Wallet summary */}
-                <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">Wallet Balance</p>
-                            {walletLoading ? (
-                                <div className="flex items-center space-x-2 text-gray-500 mt-1">
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                    <span>Loading…</span>
-                                </div>
-                            ) : walletError ? (
-                                <div className="mt-1">
-                                    <p className="text-sm text-rose-600">{walletError}</p>
-                                    <button onClick={loadWalletAndTx} className="text-sm text-blue-600 hover:underline mt-1">Retry</button>
-                                </div>
-                            ) : (
-                                <p className="text-3xl font-bold text-gray-900">EGP {Number(wallet).toFixed(2)}</p>
-                            )}
-                        </div>
-                        {currentOrgId !== '2' && (
-                            <button
-                                onClick={() => navigate('/org/payment')}
-                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                            >
-                                Add Balance
-                            </button>
-                        )}
-                    </div>
-                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
                         <div className="flex items-center justify-between">
@@ -701,14 +672,18 @@ let OrganizationDashboard = () => {
                         <ul className="divide-y">
                             {recentTx.map((t) => {
                                 const isAdd = (t.transaction_type || '').toUpperCase() === 'ADDING';
-                                const sign = isAdd ? '+' : '-';
-                                const amount = Number(t.amount) || 0;
+                                const rawAmount = Number(t.amount) || 0;
+                                const amountAbs = Math.abs(rawAmount).toFixed(2);
                                 const amountClass = isAdd ? 'text-emerald-600' : 'text-rose-600';
+                                // Credits: "+ 120.00 EGP"; Debits: "(-120.00EGP)" as requested
+                                const formatted = isAdd
+                                    ? `+ ${amountAbs} EGP`
+                                    : `(-${amountAbs}EGP)`;
                                 return (
                                     <li key={t.id} className="py-2 flex justify-between text-sm">
                                         <span className="text-gray-700">{t.description || 'Transaction'}</span>
                                         <span className={`font-semibold ${amountClass}`}>
-                                            {sign} EGP {amount.toFixed(2)}
+                                            {formatted}
                                         </span>
                                     </li>
                                 );
