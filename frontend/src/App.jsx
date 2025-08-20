@@ -5,6 +5,9 @@ import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import AdminDashboard from './pages/AdminDashboard';
 import OrganizationDashboard from './pages/OrganizationDashboard';
+import Payment from './pages/Payment';
+import PaymentSuccess from './pages/PaymentSuccess';
+import PaymentCancel from './pages/PaymentCancel';
 import OrganizationRegistration from './pages/OrganizationRegistration';
 import OrganizationLogin from './pages/OrganizationLogin';
 import PublicElections from './pages/PublicElections';
@@ -24,6 +27,9 @@ function App() {
                     <Route path="/admin" element={<AdminDashboard />} />
                     <Route path="/SystemAdmin" element={<AdminDashboard />} />
                     <Route path="/org/:id/dashboard" element={<OrganizationDashboard />} />
+                    <Route path="/org/payment" element={<Payment />} />
+                    <Route path="/org/payment/success" element={<PaymentSuccess />} />
+                    <Route path="/org/payment/cancel" element={<PaymentCancel />} />
                     <Route path="/login/org" element={<OrganizationLogin />} />
                     <Route path="/register" element={<OrganizationRegistration />} />
                     <Route path="/elections" element={<PublicElections />} />

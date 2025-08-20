@@ -43,6 +43,13 @@ const apiRequest = async (endpoint, options = {}) => {
           errorMessage = 'Authentication failed. Please check your credentials.';
         }
       } else if (response.status === 403) {
+        if (typeof errorData.detail === 'string' && errorData.detail.startsWith('payment_required')) {
+          // Redirect organization users to payment page
+          try {
+            window.location.assign('/org/payment');
+          } catch {}
+          errorMessage = 'Payment required. Please complete payment to continue.';
+        } else
         if (errorData.detail === 'err.login.inactive' || errorData.error_message === 'User is inactive') {
           errorMessage = 'Your account is inactive. Please verify your email or contact support.';
         } else if (errorData.detail && errorData.detail.includes('pending approval')) {
@@ -429,6 +436,22 @@ const systemAdminApi = {
   },
 };
 
+// Payment endpoints
+const paymentApi = {
+  createCheckoutSession: async (amountPiasters) => {
+    return apiRequest('/payment/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify({ amount: amountPiasters }),
+    });
+  },
+  getTransactions: async () => {
+    return apiRequest('/payment/transactions');
+  },
+  getWallet: async () => {
+    return apiRequest('/payment/wallet');
+  }
+};
+
 // Default export for easier importing
 const api = {
   get: (endpoint) => apiRequest(endpoint),
@@ -450,10 +473,11 @@ const api = {
   candidate: candidateApi,
   notification: notificationApi,
   systemAdmin: systemAdminApi,
+  payment: paymentApi,
   public: publicApi, // Add publicApi to the default export
   voter: voterApi,
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi, paymentApi };
 

@@ -210,6 +210,26 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
     """Create election with optional candidates and voters"""
     try:
         print(f"Creating election with data: {election_data.model_dump()}")
+        # Enforce payment: organization must be marked as paid before creating elections
+        from models.organization import Organization
+        from models.organization_admin import OrganizationAdmin
+        # Resolve owning organization user id (for organization_admins)
+        org_user_id = current_user.id
+        if current_user.role == UserRole.organization_admin:
+            oa_res = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id))
+            oa = oa_res.scalar_one_or_none()
+            if oa:
+                org_user_id = oa.organization_user_id
+        org_res = await db.execute(select(Organization).where(Organization.user_id == org_user_id))
+        org = org_res.scalar_one_or_none()
+        if not org:
+            raise HTTPException(status_code=403, detail="Organization not found")
+        if not getattr(org, "is_paid", False):
+            # 402 Payment Required is not standardized in FastAPI, use 403 with details
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="payment_required: Please complete payment to create elections.",
+            )
         
         if election_data.ends_at <= election_data.starts_at:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End date must be after start date")
@@ -740,6 +760,22 @@ async def create_election_with_csv(
     from datetime import datetime
     import pandas as pd
     import io
+
+    # Enforce payment first
+    from models.organization import Organization
+    from models.organization_admin import OrganizationAdmin
+    org_user_id = current_user.id
+    if current_user.role == UserRole.organization_admin:
+        oa_res = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id))
+        oa = oa_res.scalar_one_or_none()
+        if oa:
+            org_user_id = oa.organization_user_id
+    org_res = await db.execute(select(Organization).where(Organization.user_id == org_user_id))
+    org = org_res.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=403, detail="Organization not found")
+    if not getattr(org, "is_paid", False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="payment_required: Please complete payment to create elections.")
 
     # Parse dates
     try:

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield } from 'lucide-react';
 import CandidatesList from "../components/CandidatesList";
@@ -9,16 +9,24 @@ import Modal from "../components/Modal";
 import OrganizationAdminsTab from "../components/OrganizationAdminsTab";
 
 import { useOrganizationDashboardStats } from '../hooks/useOrganization';
+import { paymentApi } from '../services/api';
 
 
 
 let OrganizationDashboard = () => {
     let { id } = useParams();
     let { user, isLoading, organizations, elections, candidates, addElection, addCandidate, notifications } = useApp();
+    const navigate = useNavigate();
     let [activeTab, setActiveTab] = useState('overview');
     let [showCreateElection, setShowCreateElection] = useState(false);
 
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
+    const [wallet, setWallet] = useState(0);
+    const [walletLoading, setWalletLoading] = useState(true);
+    const [walletError, setWalletError] = useState(null);
+    const [recentTx, setRecentTx] = useState([]);
+    const [txLoading, setTxLoading] = useState(true);
+    const [txError, setTxError] = useState(null);
     
     // Modal state
     let [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
@@ -30,6 +38,35 @@ let OrganizationDashboard = () => {
     let showModal = (title, message, type = 'info') => {
         setModalConfig({ isOpen: true, title, message, type });
     };
+    const loadWalletAndTx = async () => {
+        setWalletLoading(true);
+        setWalletError(null);
+        setTxLoading(true);
+        setTxError(null);
+        try {
+            const w = await paymentApi.getWallet();
+            setWallet(w?.balance ?? 0);
+        } catch (e) {
+            setWalletError(e?.message || 'Failed to load wallet');
+        } finally {
+            setWalletLoading(false);
+        }
+
+        try {
+            const tx = await paymentApi.getTransactions();
+            setRecentTx((tx || []).slice(0, 5));
+        } catch (e) {
+            setTxError(e?.message || 'Failed to load transactions');
+        } finally {
+            setTxLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadWalletAndTx();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
 
     let closeModal = () => {
         setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
@@ -492,6 +529,33 @@ let OrganizationDashboard = () => {
 
         return (
             <div className="space-y-6">
+                {/* Wallet summary */}
+                <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-medium text-gray-600">Wallet Balance</p>
+                            {walletLoading ? (
+                                <div className="flex items-center space-x-2 text-gray-500 mt-1">
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <span>Loading…</span>
+                                </div>
+                            ) : walletError ? (
+                                <div className="mt-1">
+                                    <p className="text-sm text-rose-600">{walletError}</p>
+                                    <button onClick={loadWalletAndTx} className="text-sm text-blue-600 hover:underline mt-1">Retry</button>
+                                </div>
+                            ) : (
+                                <p className="text-3xl font-bold text-gray-900">EGP {Number(wallet).toFixed(2)}</p>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => navigate('/org/payment')}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                        >
+                            Add Balance
+                        </button>
+                    </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200/50">
                         <div className="flex items-center justify-between">
@@ -556,6 +620,38 @@ let OrganizationDashboard = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Recent transactions */}
+                <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Wallet Transactions</h3>
+                    {txLoading ? (
+                        <div className="flex items-center space-x-2 text-gray-500">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Loading…</span>
+                        </div>
+                    ) : txError ? (
+                        <p className="text-sm text-rose-600">{txError}</p>
+                    ) : recentTx.length === 0 ? (
+                        <p className="text-gray-500">No transactions yet.</p>
+                    ) : (
+                        <ul className="divide-y">
+                            {recentTx.map((t) => {
+                                const isAdd = (t.transaction_type || '').toUpperCase() === 'ADDING';
+                                const sign = isAdd ? '+' : '-';
+                                const amount = Number(t.amount) || 0;
+                                const amountClass = isAdd ? 'text-emerald-600' : 'text-rose-600';
+                                return (
+                                    <li key={t.id} className="py-2 flex justify-between text-sm">
+                                        <span className="text-gray-700">{t.description || 'Transaction'}</span>
+                                        <span className={`font-semibold ${amountClass}`}>
+                                            {sign} EGP {amount.toFixed(2)}
+                                        </span>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </div>
             </div>
         );
     };
@@ -596,9 +692,19 @@ let OrganizationDashboard = () => {
 
                 {activeTab === 'overview' && renderOverview()}
 
-                {activeTab === 'elections' && (
-                    <ElectionsList onCreateElection={() => setShowCreateElection(true)} />
-                )}
+                                {activeTab === 'elections' && (
+                                        <div className="space-y-4">
+                                            <div className="flex justify-end">
+                                                <button
+                                                    onClick={() => navigate('/org/payment')}
+                                                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                                                >
+                                                    Add Wallet Balance
+                                                </button>
+                                            </div>
+                                            <ElectionsList onCreateElection={() => setShowCreateElection(true)} />
+                                        </div>
+                                )}
 
                 {activeTab === 'candidates' && (
                    <div className="space-y-6">

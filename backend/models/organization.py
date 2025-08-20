@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.base import Base
@@ -27,6 +27,9 @@ class Organization(Base):
     address: Mapped[str] = mapped_column(String(500), nullable=True)
 
     description: Mapped[str] = mapped_column(String(1000), nullable=True)
+
+    # Payment status: must be true before creating elections
+    is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
 
     # Foreign Keys
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)

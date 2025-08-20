@@ -1,14 +1,33 @@
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+from sqlalchemy.engine import make_url
 from core.base import Base
 from models import *
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Support overriding URL via `alembic -x url=...`
+x_args = context.get_x_argument(as_dictionary=True)
+override_url = x_args.get("url") if isinstance(x_args, dict) else None
+
+# If SQLALCHEMY_DATABASE_URL is provided (likely async URL), convert to sync and inject into Alembic.
+db_url = override_url or os.getenv("SQLALCHEMY_DATABASE_URL")
+if db_url:
+    try:
+        url_obj = make_url(db_url)
+        # Convert async driver to sync for Alembic
+        if url_obj.drivername.endswith("+asyncpg"):
+            url_obj = url_obj.set(drivername=url_obj.drivername.replace("+asyncpg", "+psycopg2"))
+        config.set_main_option("sqlalchemy.url", str(url_obj))
+    except Exception:
+        # Fallback to alembic.ini if parsing fails
+        pass
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
