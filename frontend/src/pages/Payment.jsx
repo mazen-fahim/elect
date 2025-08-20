@@ -4,7 +4,8 @@ import { paymentApi, ApiError } from '../services/api';
 
 // Convert EGP to piasters for Stripe
 const toPiasters = (egp) => Math.round(Number(egp) * 100);
-const DEFAULT_MIN_EGP = 30;
+const DEFAULT_MIN_EGP = 0;
+const RECOMMENDED_MIN_EGP = 30; // suggest this if Stripe rejects very small amounts
 
 const Payment = () => {
   const navigate = useNavigate();
@@ -60,8 +61,8 @@ const Payment = () => {
           } catch {}
         }
         if (voterNum > 0) {
-          const amt = voterNum * 0.001;
-          initAmount = Number(amt.toFixed(3));
+          const amt = voterNum * 0.1; // 0.1 EGP per voter
+          initAmount = Number(amt.toFixed(2));
           if (initAmount < minEgp) initAmount = minEgp;
           setAmountEgp(String(initAmount));
           setProductName(`Election voter capacity for ${voterNum} voters`);
@@ -125,8 +126,17 @@ const Payment = () => {
         if (url) window.location.href = url;
         else setError('Failed to start checkout session.');
       } catch (err) {
-        if (err instanceof ApiError) setError(err.message);
-        else setError('Something went wrong.');
+        if (err instanceof ApiError) {
+          const msg = String(err.message || '');
+          if (msg.toLowerCase().includes('200 fils')) {
+            setAmountEgp(String(RECOMMENDED_MIN_EGP));
+            setError(`Amount too low for Stripe. Try at least EGP ${RECOMMENDED_MIN_EGP}.`);
+          } else {
+            setError(msg);
+          }
+        } else {
+          setError('Something went wrong.');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -165,8 +175,17 @@ const Payment = () => {
       if (url) window.location.href = url;
       else setError('Failed to start checkout session.');
     } catch (err) {
-      if (err instanceof ApiError) setError(err.message);
-      else setError('Something went wrong.');
+      if (err instanceof ApiError) {
+        const msg = String(err.message || '');
+        if (msg.toLowerCase().includes('200 fils')) {
+          setAmountEgp(String(RECOMMENDED_MIN_EGP));
+          setError(`Amount too low for Stripe. Try at least EGP ${RECOMMENDED_MIN_EGP}.`);
+        } else {
+          setError(msg);
+        }
+      } else {
+        setError('Something went wrong.');
+      }
     } finally {
       setIsLoading(false);
     }

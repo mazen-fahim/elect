@@ -21,7 +21,7 @@ let OrganizationDashboard = () => {
     // Voter pricing modal state (shown before payment when creating election)
     const [showVoterPricing, setShowVoterPricing] = useState(false);
     const [voterCount, setVoterCount] = useState(1000);
-    const PRICE_PER_VOTER = 0.001; // Assumed in the platform's payment currency
+    const PRICE_PER_VOTER = 0.1; // EGP per voter (kept in sync with Payment.jsx)
 
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
     const [wallet, setWallet] = useState(0);
@@ -86,6 +86,14 @@ let OrganizationDashboard = () => {
 
     // Handle Create Election click: ask for voter count, then go to payment and reopen create after success
     const handleCreateElectionClick = async () => {
+        // Prefill with last planned voters if available to keep it consistent end-to-end
+        try {
+            const saved = localStorage.getItem('plannedVoters');
+            if (saved && !Number.isNaN(Number(saved))) {
+                const n = Math.max(1, Number(saved));
+                setVoterCount(n);
+            }
+        } catch {}
         setShowVoterPricing(true);
     };
 
@@ -101,7 +109,7 @@ let OrganizationDashboard = () => {
             return;
         }
         // Compute total in current platform currency (EGP by default) and pass to payment page.
-        const totalAmount = (n * PRICE_PER_VOTER).toFixed(3); // keep milli precision, Payment rounds to piasters
+    const totalAmount = (n * PRICE_PER_VOTER).toFixed(2); // align with Stripe rounding (piasters in Payment.jsx)
         try {
             localStorage.setItem('afterPaymentOpenCreate', '1');
             localStorage.setItem('plannedVoters', String(n));
@@ -798,12 +806,13 @@ let OrganizationDashboard = () => {
                                 <input
                                     type="number"
                                     min="1"
+                                    step="1"
                                     value={voterCount}
-                                    onChange={(e) => setVoterCount(Math.max(0, Number(e.target.value) || 0))}
+                                    onChange={(e) => setVoterCount(Math.max(1, Number(e.target.value) || 1))}
                                     className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                                 />
                                 <div className="text-lg font-semibold text-gray-900">
-                                    Total: <span> {(Number(voterCount || 0) * PRICE_PER_VOTER).toFixed(3)}</span>
+                                    Total: <span> {(Number(voterCount || 0) * PRICE_PER_VOTER).toFixed(2)}</span>
                                 </div>
                                 <p className="text-xs text-gray-500">Amounts are charged in your configured currency.</p>
                             </div>
