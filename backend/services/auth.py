@@ -122,12 +122,24 @@ class AuthService:
 
         except IntegrityError as e:
             await self.db.rollback()
-            print(f"Database integrity error: {str(e)}")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error with database transaction")
+            msg = str(getattr(e, "orig", e))
+            # Map common unique constraint violations to our standard error codes
+            if ("organizations" in msg and "api_endpoint" in msg) or ("api_endpoint" in msg and "unique" in msg.lower()):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.api_endpoint") from e
+            if ("users" in msg and "email" in msg) or ("email" in msg and "unique" in msg.lower()):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.email") from e
+            if ("organizations" in msg and "name" in msg) or ("name" in msg and "unique" in msg.lower()):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="err.register.name") from e
+            print(f"Database integrity error: {msg}")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error with database transaction") from e
+        except HTTPException:
+            # Re-raise known HTTPExceptions (e.g., err.register.*) so the global error handler can map them
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
             print(f"Unexpected error during registration: {str(e)}")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error with database transaction")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Error with database transaction") from e
 
     def is_admin(self, user: User) -> bool:
         return user.role == UserRole.admin

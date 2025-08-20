@@ -42,6 +42,22 @@ def _is_fake_stripe_mode(key: str | None) -> bool:
     return len(key) < 20  # clearly not a real key
 
 
+@router.get("/config")
+async def get_payment_config():
+    """Expose minimal payment config for the frontend UI.
+
+    Returns:
+    - mode: "live" if a real live secret key is configured, else "test" (includes dev simulation and sk_test_)
+    - currency: ISO currency code
+    - product_name: current product label
+    """
+    key = getattr(settings, "STRIPE_SECRET_KEY", None)
+    mode = "test"
+    if key and not _is_fake_stripe_mode(key):
+        mode = "live" if str(key).startswith("sk_live") else "test"
+    return {"mode": mode, "currency": "EGP", "product_name": "Wallet Top-up"}
+
+
 @router.post("/create-checkout-session")
 async def create_checkout_session(
     checkout_data: CreateCheckoutRequest,

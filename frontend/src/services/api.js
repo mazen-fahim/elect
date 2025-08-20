@@ -444,6 +444,9 @@ const paymentApi = {
       body: JSON.stringify({ amount: amountPiasters }),
     });
   },
+  getConfig: async () => {
+    return apiRequest('/payment/config');
+  },
   getTransactions: async () => {
     return apiRequest('/payment/transactions');
   },

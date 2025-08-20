@@ -67,6 +67,26 @@ let OrganizationDashboard = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // If redirected from payment success with a flag, open the create election modal
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('openCreate') === '1') {
+                setShowCreateElection(true);
+                // Clean up the URL param without reloading
+                const url = new URL(window.location.href);
+                url.searchParams.delete('openCreate');
+                window.history.replaceState({}, '', url.toString());
+            }
+        } catch {}
+    }, []);
+
+    // Handle Create Election click: always go to payment and reopen modal after success
+    const handleCreateElectionClick = async () => {
+        try { localStorage.setItem('afterPaymentOpenCreate', '1'); } catch {}
+        navigate('/org/payment');
+    };
+
 
     let closeModal = () => {
         setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
@@ -702,7 +722,7 @@ let OrganizationDashboard = () => {
                                                     Add Wallet Balance
                                                 </button>
                                             </div>
-                                            <ElectionsList onCreateElection={() => setShowCreateElection(true)} />
+                                            <ElectionsList onCreateElection={handleCreateElectionClick} />
                                         </div>
                                 )}
 
