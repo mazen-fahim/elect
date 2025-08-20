@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.future import select
 
@@ -12,6 +12,7 @@ from models.organization_admin import OrganizationAdmin
 from models.user import UserRole
 from services.auth import AuthService
 from services.notification import NotificationService
+from services.email import EmailService
 from models.notification import NotificationType
 
 
@@ -69,7 +70,10 @@ async def list_org_admins(db: db_dependency, current_org_user: organization_depe
 
 @router.post("/", response_model=OrganizationAdminRead, status_code=status.HTTP_201_CREATED)
 async def create_org_admin(
-    payload: OrganizationAdminCreate, db: db_dependency, current_org_user: organization_dependency
+    payload: OrganizationAdminCreate,
+    db: db_dependency,
+    current_org_user: organization_dependency,
+    background_tasks: BackgroundTasks,
 ):
     # Only boss can add admins
     if current_org_user.role != UserRole.organization:
@@ -98,7 +102,8 @@ async def create_org_admin(
         role=UserRole.organization_admin,
         created_at=datetime.now(timezone.utc),
         last_access_at=datetime.now(timezone.utc),
-        is_active=True,
+        # Org admins must verify email before becoming active
+        is_active=False,
     )
     db.add(new_user)
     await db.flush()
@@ -118,6 +123,14 @@ async def create_org_admin(
     admin_created_at = org_admin.created_at
     
     await db.commit()
+
+    # Send verification email to the new org admin (non-blocking)
+    try:
+        email_service = EmailService(db)
+        await email_service.send_verification_email(new_user, background_tasks)
+    except Exception as _e:
+        # Don't fail creation if email dispatch fails; logs will contain details
+        pass
     
     return OrganizationAdminRead(
         user_id=user_id, 

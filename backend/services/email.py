@@ -99,6 +99,10 @@ class EmailService:
         self, email: str, verification_link: str, expires_at: datetime, background_tasks: BackgroundTasks
     ):
         try:
+            # Development aid: always log the link to backend logs so activation is possible without SMTP
+            print(
+                f"[EmailService] Queuing email to: {email} | link: {verification_link} | expires_at: {expires_at.isoformat()}"
+            )
             html = f"""<html>
 <body>
     <p>Hello,</p>
