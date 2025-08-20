@@ -16,6 +16,7 @@ const Payment = () => {
   const [cardNumber, setCardNumber] = useState('');
   const [exp, setExp] = useState('');
   const [cvc, setCvc] = useState('');
+  const [zip, setZip] = useState('');
 
   const formatCardNumber = (val) => {
     const digits = String(val || '').replace(/\D/g, '').slice(0, 19); // max 19 digits
@@ -51,6 +52,11 @@ const Payment = () => {
   const handleCvcChange = (e) => {
     const digits = String(e.target.value || '').replace(/\D/g, '').slice(0, 3);
     setCvc(digits);
+  };
+
+  const handleZipChange = (e) => {
+    const letters = String(e.target.value || '').replace(/[^a-zA-Z]/g, '').slice(0, 3).toUpperCase();
+    setZip(letters);
   };
 
   useEffect(() => {
@@ -194,7 +200,18 @@ const Payment = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">ZIP</label>
-              <input type="text" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="ZIP" />
+              <input
+                type="text"
+                inputMode="text"
+                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                placeholder="ZIP"
+                aria-label="ZIP"
+                value={zip}
+                onChange={handleZipChange}
+                maxLength={3}
+                pattern="^[A-Za-z]{3}$"
+                title="Enter 3 letters"
+              />
             </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
