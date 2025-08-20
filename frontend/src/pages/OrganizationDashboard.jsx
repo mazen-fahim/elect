@@ -19,6 +19,10 @@ let OrganizationDashboard = () => {
     const navigate = useNavigate();
     let [activeTab, setActiveTab] = useState('overview');
     let [showCreateElection, setShowCreateElection] = useState(false);
+    // Voter pricing modal state (shown before payment when creating election)
+    const [showVoterPricing, setShowVoterPricing] = useState(false);
+    const [voterCount, setVoterCount] = useState(1000);
+    const PRICE_PER_VOTER = 0.001; // Assumed in the platform's payment currency
 
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
     const [wallet, setWallet] = useState(0);
@@ -81,15 +85,35 @@ let OrganizationDashboard = () => {
         } catch {}
     }, []);
 
-    // Handle Create Election click: go to payment first, then reopen create after success
+    // Handle Create Election click: ask for voter count, then go to payment and reopen create after success
     const handleCreateElectionClick = async () => {
-        try { localStorage.setItem('afterPaymentOpenCreate', '1'); } catch {}
-        navigate('/org/payment');
+        setShowVoterPricing(true);
     };
 
 
     let closeModal = () => {
         setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
+    };
+
+    const proceedToPaymentForVoters = () => {
+        const n = Number(voterCount) || 0;
+        if (n <= 0) {
+            showModal('Invalid number', 'Please enter a positive number of voters.', 'warning');
+            return;
+        }
+        // Compute total in current platform currency (EGP by default) and pass to payment page.
+        const totalAmount = (n * PRICE_PER_VOTER).toFixed(3); // keep milli precision, Payment rounds to piasters
+        try {
+            localStorage.setItem('afterPaymentOpenCreate', '1');
+            localStorage.setItem('plannedVoters', String(n));
+        } catch {}
+        const params = new URLSearchParams({
+            amount: totalAmount,
+            purpose: 'election-voters',
+            voters: String(n),
+        }).toString();
+        setShowVoterPricing(false);
+        navigate(`/org/payment?${params}`);
     };
 
     // Show loading while checking authentication
@@ -144,6 +168,13 @@ let OrganizationDashboard = () => {
     let orgCandidates = candidates.filter((c) => orgElections.some((e) => e.candidates.includes(c.id)));
 
     let CreateElectionModal = () => {
+        // Prefill potential voters from pricing modal (stored in localStorage)
+        let initialPlannedVoters = 100;
+        try {
+            const saved = localStorage.getItem('plannedVoters');
+            if (saved) initialPlannedVoters = Math.max(1, Number(saved) || 100);
+        } catch {}
+
         let [formData, setFormData] = useState({
             title: '',
             description: '',
@@ -155,7 +186,7 @@ let OrganizationDashboard = () => {
             candidatesFile: null,
             votersFile: null,
             numVotesPerVoter: 1,
-            potentialVoters: 100,
+            potentialVoters: initialPlannedVoters,
         });
 
         let handleSubmit = async (e) => {
@@ -205,6 +236,7 @@ let OrganizationDashboard = () => {
                 // Add to local state (this will be replaced with react-query later)
                 addElection(newElection);
                 setShowCreateElection(false);
+                try { localStorage.removeItem('plannedVoters'); } catch {}
                 resetForm();
                 
             } catch (error) {
@@ -248,6 +280,7 @@ let OrganizationDashboard = () => {
                 // Add to local state
                 addElection(newElection);
                 setShowCreateElection(false);
+                try { localStorage.removeItem('plannedVoters'); } catch {}
                 resetForm();
                 
             } catch (error) {
@@ -750,6 +783,42 @@ let OrganizationDashboard = () => {
 
 
                 {showCreateElection && <CreateElectionModal />}
+                {showVoterPricing && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+                            <h3 className="text-xl font-semibold text-gray-900 mb-4">Plan your election</h3>
+                            <p className="text-sm text-gray-600 mb-4">Enter how many voters you expect. Cost is 0.001 per voter. You'll be redirected to payment to add the required balance.</p>
+                            <div className="space-y-3">
+                                <label className="block text-sm font-medium text-gray-700">Number of voters</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={voterCount}
+                                    onChange={(e) => setVoterCount(Math.max(0, Number(e.target.value) || 0))}
+                                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                />
+                                <div className="text-lg font-semibold text-gray-900">
+                                    Total: <span> {(Number(voterCount || 0) * PRICE_PER_VOTER).toFixed(3)}</span>
+                                </div>
+                                <p className="text-xs text-gray-500">Amounts are charged in your configured currency.</p>
+                            </div>
+                            <div className="mt-6 flex gap-3">
+                                <button
+                                    onClick={() => setShowVoterPricing(false)}
+                                    className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={proceedToPaymentForVoters}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                >
+                                    Continue to Payment
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 
                 {/* Modal for notifications */}
                 <Modal

@@ -13,6 +13,8 @@ const Payment = () => {
   const [mode, setMode] = useState('test');
   const [currency, setCurrency] = useState('EGP');
   const [productName, setProductName] = useState('Wallet Top-up');
+  const [purpose, setPurpose] = useState('');
+  const [isLocked, setIsLocked] = useState(false);
   const [cardNumber, setCardNumber] = useState('');
   const [exp, setExp] = useState('');
   const [cvc, setCvc] = useState('');
@@ -70,6 +72,46 @@ const Payment = () => {
     })();
   }, []);
 
+  // Prefill amount/purpose when coming from Create Election flow
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const a = params.get('amount');
+      const purp = params.get('purpose');
+      const voters = params.get('voters');
+      if (purp) setPurpose(purp);
+
+      if (purp === 'election-voters') {
+        setIsLocked(true);
+        let voterNum = 0;
+        if (voters && !Number.isNaN(Number(voters))) {
+          voterNum = Math.max(1, Number(voters));
+        } else {
+          try {
+            const saved = localStorage.getItem('plannedVoters');
+            if (saved && !Number.isNaN(Number(saved))) voterNum = Math.max(1, Number(saved));
+          } catch {}
+        }
+        if (voterNum > 0) {
+          const amt = voterNum * 0.001; // price per voter
+          const fixed = amt.toFixed(3);
+          setAmountEgp(String(Number(fixed)));
+          setProductName(`Election voter capacity (${voterNum} voters)`);
+        } else if (a && !Number.isNaN(Number(a))) {
+          const normalized = Math.max(Number(a), 0.01);
+          const fixed = normalized.toFixed(3);
+          setAmountEgp(String(Number(fixed)));
+          setProductName('Election voter capacity');
+        }
+      } else if (a && !Number.isNaN(Number(a))) {
+        // Non-locked top-ups can still be prefilled
+        const normalized = Math.max(Number(a), 0.01);
+        const fixed = normalized.toFixed(3);
+        setAmountEgp(String(Number(fixed)));
+      }
+    } catch {}
+  }, []);
+
   const handleTopUp = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -113,20 +155,28 @@ const Payment = () => {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">{productName}</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Amount (EGP)</label>
+              <label className="block text-sm text-gray-600 mb-1">Amount ({currency}) {isLocked && <span className="ml-1 text-xs text-gray-500">(locked)</span>}</label>
               <input
                 type="number"
-                min="1"
-                step="1"
+                min="0.01"
+                step="0.01"
                 value={amountEgp}
-                onChange={(e) => setAmountEgp(e.target.value)}
+                onChange={(e) => {
+                  if (!isLocked) setAmountEgp(e.target.value);
+                }}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                disabled={isLocked}
+                readOnly={isLocked}
               />
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-gray-900">{currency} {Number(amountEgp || 0).toFixed(0)}</span>
+              <span className="text-3xl font-bold text-gray-900">{currency} {Number(amountEgp || 0).toFixed(2)}</span>
             </div>
-            <p className="text-sm text-gray-500">Top up your wallet to create and manage elections.</p>
+            <p className="text-sm text-gray-500">
+              {purpose === 'election-voters'
+                ? 'This payment will cover the voter capacity for your upcoming election.'
+                : 'Top up your wallet to create and manage elections.'}
+            </p>
           </div>
         </div>
 
