@@ -1,7 +1,6 @@
 from typing import Annotated
 import logging
 from decimal import Decimal
-from uuid import uuid4
 import json
 
 import stripe
@@ -23,23 +22,20 @@ logger = logging.getLogger("payment")
 
 
 def _require_stripe_key() -> str:
-    if not hasattr(settings, "STRIPE_SECRET_KEY") or not settings.STRIPE_SECRET_KEY:
+    key = getattr(settings, "STRIPE_SECRET_KEY", None)
+    if not key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Stripe is not configured on the server.",
         )
-    key = settings.STRIPE_SECRET_KEY
-    # Allow dev fallback when key is clearly not set properly (short or placeholder)
+    # Basic validation: must look like a real Stripe key and have realistic length
+    key_str = str(key)
+    if not (key_str.startswith("sk_test_") or key_str.startswith("sk_live_")) or len(key_str) < 24:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Invalid Stripe secret key configured. Please set a full sk_test_... or sk_live_... value.",
+        )
     return key
-
-
-def _is_fake_stripe_mode(key: str | None) -> bool:
-    """Detect if we should simulate Stripe (dev mode).
-    We treat obviously invalid keys (empty or too short) as a cue to simulate.
-    """
-    if not key:
-        return True
-    return len(key) < 20  # clearly not a real key
 
 
 @router.get("/config")
@@ -52,10 +48,10 @@ async def get_payment_config():
     - product_name: current product label
     """
     key = getattr(settings, "STRIPE_SECRET_KEY", None)
-    mode = "test"
-    if key and not _is_fake_stripe_mode(key):
-        mode = "live" if str(key).startswith("sk_live") else "test"
-    return {"mode": mode, "currency": "EGP", "product_name": "Wallet Top-up"}
+    mode = "test" if key and str(key).startswith("sk_test_") else ("live" if key and str(key).startswith("sk_live_") else "test")
+    # Minimum amount (in EGP) to satisfy Stripe's 200 fils requirement with buffer
+    min_egp = 30
+    return {"mode": mode, "currency": "EGP", "product_name": "Wallet Top-up", "min_egp": min_egp}
 
 
 @router.post("/create-checkout-session")
@@ -64,24 +60,20 @@ async def create_checkout_session(
     user: user_dependency,
     db: db_dependency,
 ):
-    # Configure Stripe per-request to avoid import-time failures when env is missing
-    api_key = _require_stripe_key()
-    if _is_fake_stripe_mode(api_key):
-        # Simulate a checkout session by directly returning the success URL to self
-        success_url = f"{settings.SERVER_DOMAIN}/api/payment/payment-success"
-        fake_session_id = f"fake_{uuid4().hex}"
-        url = (
-            f"{success_url}?session_id={fake_session_id}"
-            f"&amount={checkout_data.amount}&user_id={user.id}"
+    # Stripe requires a minimum charge that converts to at least 200 fils (2 AED).
+    # With current FX, this is roughly >= EGP 25.00. Enforce this to avoid Stripe errors.
+    MIN_EGP_PIASTERS = 3000  # 30 EGP
+    if checkout_data.amount < MIN_EGP_PIASTERS:
+        raise HTTPException(
+            status_code=400,
+            detail="Amount too low. Minimum is EGP 30.00 to satisfy Stripe currency limits.",
         )
-        logger.info("[payment] Dev mode: returning simulated checkout URL -> %s", url)
-        return {"url": url}
 
+    api_key = _require_stripe_key()
     stripe.api_key = api_key
     logger.info("[payment] Using Stripe key: %s***", api_key[:7] if api_key else "<empty>")
 
     try:
-        # Stripe replaces {CHECKOUT_SESSION_ID} automatically
         success_url = f"{settings.SERVER_DOMAIN}/api/payment/payment-success?session_id={{CHECKOUT_SESSION_ID}}"
         cancel_url = f"{settings.APP_HOST}/org/payment/cancel"
 
@@ -90,7 +82,7 @@ async def create_checkout_session(
                 {
                     "price_data": {
                         "currency": "egp",
-                        "unit_amount": checkout_data.amount,  # amount in piasters (100 = 1 EGP)
+                        "unit_amount": checkout_data.amount,  # (100 = 1 EGP)
                         "product_data": {
                             "name": "Wallet Top-up",
                             "description": f"Add EGP {checkout_data.amount / 100:.2f} to your e-wallet",
@@ -104,7 +96,7 @@ async def create_checkout_session(
             cancel_url=cancel_url,
             metadata={"user_id": str(user.id)},
         )
-        # Persist the session id for later verification (if desired)
+
         user.stripe_session_id = checkout_session.id
         await db.commit()
         return {"url": checkout_session.url}
@@ -125,47 +117,11 @@ async def payment_success(
     user_id: Annotated[int | None, Query()] = None,
 ):
     api_key = _require_stripe_key()
-    # Simulated flow (dev): session_id starts with fake_ and amount is provided
-    if _is_fake_stripe_mode(api_key) and session_id.startswith("fake_"):
-        logger.info("[payment] Dev mode success for %s, amount=%s", session_id, amount)
-
-        # We expect the amount in piasters
-        if amount is None or amount <= 0:
-            return RedirectResponse(url=f"{settings.APP_HOST}/org/payment/cancel", status_code=302)
-        if not user_id:
-            return RedirectResponse(url=f"{settings.APP_HOST}/org/payment/cancel", status_code=302)
-
-        # Credit the user's wallet directly
-        result = await db.execute(select(User).where(User.id == user_id))
-        user_obj: User | None = result.scalar_one_or_none()
-        if not user_obj:
-            return RedirectResponse(url=f"{settings.APP_HOST}/org/payment/cancel", status_code=302)
-
-        amount_egp = Decimal(int(amount)) / Decimal(100)
-        user_obj.wallet = (Decimal(user_obj.wallet) if user_obj.wallet is not None else Decimal(0)) + amount_egp
-
-        new_tx = Transaction(
-            user_id=user_obj.id,
-            amount=float(amount_egp),
-            transaction_type=TransactionType.ADDING,
-            description="Wallet top-up (dev mode)",
-        )
-        db.add(new_tx)
-        # Mark organization as paid
-        org_res = await db.execute(select(Organization).where(Organization.user_id == user_id))
-        org = org_res.scalar_one_or_none()
-        if org:
-            org.is_paid = True
-        await db.commit()
-
-        return RedirectResponse(url=f"{settings.APP_HOST}/org/payment/success", status_code=302)
-
     stripe.api_key = api_key
 
     try:
         session = stripe.checkout.Session.retrieve(session_id)
 
-        # Stripe Session status can be "complete" when the checkout is finished
         if getattr(session, "status", None) == "complete":
             metadata = getattr(session, "metadata", None) or {}
             user_id_str = metadata.get("user_id")
@@ -174,7 +130,7 @@ async def payment_success(
             if not user_id_str or amount_total is None:
                 return RedirectResponse(url=f"{settings.APP_HOST}/org/payment/cancel", status_code=302)
 
-            # Validate and update wallet inside DB transaction
+           
             try:
                 user_id = int(user_id_str)
             except ValueError:
@@ -186,18 +142,13 @@ async def payment_success(
             if not user:
                 return RedirectResponse(url=f"{settings.APP_HOST}/org/payment/cancel", status_code=302)
 
-            # Optional: if you decide to compare session IDs later
-            # if user.stripe_session_id and user.stripe_session_id != session_id:
-            #     return RedirectResponse(url=f"{settings.APP_HOST}/cancel", status_code=302)
-
-            # Convert piasters to EGP
+         
             amount_egp = Decimal(int(amount_total)) / Decimal(100)
 
-            # Clear session id and add to wallet
             user.stripe_session_id = None
             user.wallet = (Decimal(user.wallet) if user.wallet is not None else Decimal(0)) + amount_egp
 
-            # Record transaction
+            
             new_tx = Transaction(
                 user_id=user.id,
                 amount=float(amount_egp),
@@ -205,7 +156,7 @@ async def payment_success(
                 description="Wallet top-up via Stripe",
             )
             db.add(new_tx)
-            # Mark organization as paid
+            
             org_res = await db.execute(select(Organization).where(Organization.user_id == user.id))
             org = org_res.scalar_one_or_none()
             if org:

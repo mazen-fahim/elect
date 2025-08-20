@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useLogin } from '../hooks/useAuth';
@@ -7,6 +7,7 @@ import { useLogin } from '../hooks/useAuth';
 let OrganizationLogin = () => {
     let { login } = useApp();
     let navigate = useNavigate();
+    let location = useLocation();
     let [formData, setFormData] = useState({
         email: '',
         password: '',
@@ -52,7 +53,18 @@ let OrganizationLogin = () => {
             
             login(userData);
             
-            // Navigate to appropriate dashboard based on role and organization
+            // Respect "next" param to return user where they were headed (e.g., payment)
+            const params = new URLSearchParams(location.search);
+            const next = params.get('next');
+            if (next) {
+                try {
+                    const target = decodeURIComponent(next);
+                    navigate(target, { replace: true });
+                    return;
+                } catch {}
+            }
+
+            // Otherwise navigate to appropriate dashboard based on role and organization
             if (userInfo.role === 'organization' && userInfo.organization_id) {
                 navigate(`/org/${userInfo.organization_id}/dashboard`);
             } else if (userInfo.role === 'organization_admin' && userInfo.organization_id) {
