@@ -8,7 +8,6 @@ let VoterLogin = () => {
 
     let [step, setStep] = useState(1);
     let [nationalId, setNationalId] = useState('');
-    let [phoneNumber, setPhoneNumber] = useState('');
     let [otpCode, setOtpCode] = useState('');
     let [submitting, setSubmitting] = useState(false);
     let [error, setError] = useState('');
@@ -20,7 +19,8 @@ let VoterLogin = () => {
         setError('');
         setInfo('');
         try {
-            await voterApi.requestOtp({ electionId, phoneNumber, nationalId });
+            // Only send national ID, phone number will be retrieved from database
+            await voterApi.requestOtp({ electionId, nationalId });
             setInfo('OTP sent. Please check your phone.');
             setStep(2);
         } catch (err) {
@@ -36,9 +36,18 @@ let VoterLogin = () => {
         setError('');
         setInfo('');
         try {
-            await voterApi.verifyOtp({ electionId, code: otpCode, nationalId });
-            // On success, go back to elections list
-            navigate('/elections', { replace: true });
+            const response = await voterApi.verifyOtp({ electionId, code: otpCode, nationalId });
+            
+            // Redirect to voting page with voter information
+            navigate(`/vote/${electionId}/voting`, { 
+                replace: true,
+                state: { 
+                    voterInfo: {
+                        voter_hashed_national_id: response.voter_hashed_national_id,
+                        election_id: response.election_id
+                    }
+                }
+            });
         } catch (err) {
             setError(err?.message || 'Invalid or expired OTP');
         } finally {
@@ -64,17 +73,9 @@ let VoterLogin = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 placeholder="Enter your national ID"
                             />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number (E.164)</label>
-                            <input
-                                type="tel"
-                                value={phoneNumber}
-                                onChange={(e) => setPhoneNumber(e.target.value)}
-                                required
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                placeholder="+201234567890"
-                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Enter your national ID to receive an OTP on your registered phone number
+                            </p>
                         </div>
                         {error && (
                             <div className="text-sm text-red-600">{error}</div>
@@ -105,6 +106,9 @@ let VoterLogin = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 tracking-widest text-center"
                                 placeholder="123456"
                             />
+                            <p className="text-xs text-gray-500 mt-1">
+                                Enter the 6-digit code sent to your phone
+                            </p>
                         </div>
                         {error && (
                             <div className="text-sm text-red-600">{error}</div>
