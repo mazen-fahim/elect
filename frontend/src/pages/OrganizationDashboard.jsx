@@ -12,7 +12,6 @@ import { useOrganizationDashboardStats } from '../hooks/useOrganization';
 import { paymentApi } from '../services/api';
 
 
-
 let OrganizationDashboard = () => {
     let { id } = useParams();
     let { user, isLoading, organizations, elections, candidates, addElection, addCandidate, notifications } = useApp();
