@@ -15,6 +15,7 @@ const Payment = () => {
   const [productName, setProductName] = useState('Wallet Top-up');
   const [purpose, setPurpose] = useState('');
   const [isLocked, setIsLocked] = useState(false);
+  const [maxAmount, setMaxAmount] = useState(null);
   const [cardNumber, setCardNumber] = useState('');
   const [exp, setExp] = useState('');
   const [cvc, setCvc] = useState('');
@@ -79,9 +80,11 @@ const Payment = () => {
       const a = params.get('amount');
       const purp = params.get('purpose');
       const voters = params.get('voters');
+      const locked = params.get('locked');
       if (purp) setPurpose(purp);
 
-      if (purp === 'election-voters') {
+      let initAmount = null;
+      if (purp === 'election-voters' || locked === '1') {
         setIsLocked(true);
         let voterNum = 0;
         if (voters && !Number.isNaN(Number(voters))) {
@@ -94,21 +97,27 @@ const Payment = () => {
         }
         if (voterNum > 0) {
           const amt = voterNum * 0.001; // price per voter
-          const fixed = amt.toFixed(3);
-          setAmountEgp(String(Number(fixed)));
-          setProductName(`Election voter capacity (${voterNum} voters)`);
+          initAmount = Number(amt.toFixed(3));
+          setAmountEgp(String(initAmount));
+          setProductName(`Election voter capacity for ${voterNum} voters`);
         } else if (a && !Number.isNaN(Number(a))) {
           const normalized = Math.max(Number(a), 0.01);
-          const fixed = normalized.toFixed(3);
-          setAmountEgp(String(Number(fixed)));
+          initAmount = Number(normalized.toFixed(3));
+          setAmountEgp(String(initAmount));
           setProductName('Election voter capacity');
         }
       } else if (a && !Number.isNaN(Number(a))) {
-        // Non-locked top-ups can still be prefilled
+        // Non-locked top-ups can still be prefilled, but max is the initial value
         const normalized = Math.max(Number(a), 0.01);
-        const fixed = normalized.toFixed(3);
-        setAmountEgp(String(Number(fixed)));
+        initAmount = Number(normalized.toFixed(3));
+        setAmountEgp(String(initAmount));
       }
+
+      if (initAmount === null) {
+        // Default initial amount, also acts as max for non-locked flows
+        initAmount = Math.max(Number(amountEgp) || 100, 0.01);
+      }
+      setMaxAmount(initAmount);
     } catch {}
   }, []);
 
@@ -155,18 +164,26 @@ const Payment = () => {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">{productName}</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-600 mb-1">Amount ({currency}) {isLocked && <span className="ml-1 text-xs text-gray-500">(locked)</span>}</label>
+              <label className="block text-sm text-gray-600 mb-1">Amount ({currency}) {isLocked ? <span className="ml-1 text-xs text-gray-500">(locked)</span> : maxAmount !== null && <span className="ml-1 text-xs text-gray-500">(max {currency} {Number(maxAmount).toFixed(2)})</span>}</label>
               <input
                 type="number"
                 min="0.01"
                 step="0.01"
                 value={amountEgp}
                 onChange={(e) => {
-                  if (!isLocked) setAmountEgp(e.target.value);
+                  if (!isLocked) {
+                    const raw = e.target.value;
+                    let num = Number(raw);
+                    if (Number.isNaN(num)) num = 0;
+                    if (maxAmount !== null && num > Number(maxAmount)) num = Number(maxAmount);
+                    if (num < 0.01) num = 0.01;
+                    setAmountEgp(String(num));
+                  }
                 }}
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 disabled={isLocked}
                 readOnly={isLocked}
+                max={maxAmount !== null ? Number(maxAmount) : undefined}
               />
             </div>
             <div className="flex items-baseline gap-2">

@@ -111,6 +111,7 @@ let OrganizationDashboard = () => {
             amount: totalAmount,
             purpose: 'election-voters',
             voters: String(n),
+            locked: '1',
         }).toString();
         setShowVoterPricing(false);
         navigate(`/org/payment?${params}`);
@@ -166,6 +167,7 @@ let OrganizationDashboard = () => {
 
     let orgElections = elections.filter((e) => e.organizationId === (userOrgId || urlOrgId));
     let orgCandidates = candidates.filter((c) => orgElections.some((e) => e.candidates.includes(c.id)));
+    const currentOrgId = (userOrgId || urlOrgId)?.toString();
 
     let CreateElectionModal = () => {
         // Prefill potential voters from pricing modal (stored in localStorage)
@@ -601,12 +603,14 @@ let OrganizationDashboard = () => {
                                 <p className="text-3xl font-bold text-gray-900">EGP {Number(wallet).toFixed(2)}</p>
                             )}
                         </div>
-                        <button
-                            onClick={() => navigate('/org/payment')}
-                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                        >
-                            Add Balance
-                        </button>
+                        {currentOrgId !== '2' && (
+                            <button
+                                onClick={() => navigate('/org/payment')}
+                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                            >
+                                Add Balance
+                            </button>
+                        )}
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -748,12 +752,14 @@ let OrganizationDashboard = () => {
                                 {activeTab === 'elections' && (
                                         <div className="space-y-4">
                                             <div className="flex justify-end">
-                                                <button
-                                                    onClick={() => navigate('/org/payment')}
-                                                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-                                                >
-                                                    Add Wallet Balance
-                                                </button>
+                                                {currentOrgId !== '2' && (
+                                                    <button
+                                                        onClick={() => navigate('/org/payment')}
+                                                        className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                                                    >
+                                                        Add Wallet Balance
+                                                    </button>
+                                                )}
                                             </div>
                                             <ElectionsList onCreateElection={handleCreateElectionClick} />
                                         </div>
@@ -787,7 +793,7 @@ let OrganizationDashboard = () => {
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
                             <h3 className="text-xl font-semibold text-gray-900 mb-4">Plan your election</h3>
-                            <p className="text-sm text-gray-600 mb-4">Enter how many voters you expect. Cost is 0.001 per voter. You'll be redirected to payment to add the required balance.</p>
+                            <p className="text-sm text-gray-600 mb-4">Enter how many voters you expect. You'll be redirected to payment to add the required balance.</p>
                             <div className="space-y-3">
                                 <label className="block text-sm font-medium text-gray-700">Number of voters</label>
                                 <input
