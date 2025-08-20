@@ -687,7 +687,7 @@ let OrganizationDashboard = () => {
 
                 {/* Recent transactions */}
                 <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Wallet Transactions</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h3>
                     {txLoading ? (
                         <div className="flex items-center space-x-2 text-gray-500">
                             <Loader2 className="h-4 w-4 animate-spin" />
