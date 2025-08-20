@@ -675,14 +675,12 @@ let OrganizationDashboard = () => {
                                 const rawAmount = Number(t.amount) || 0;
                                 const amountAbs = Math.abs(rawAmount).toFixed(2);
                                 const amountClass = isAdd ? 'text-emerald-600' : 'text-rose-600';
-                                // Credits: "+ 120.00 EGP"; Debits: "(-120.00EGP)" as requested
-                                const formatted = isAdd
-                                    ? `+ ${amountAbs} EGP`
-                                    : `(-${amountAbs}EGP)`;
+                                // Always show as negative in parentheses per request: "(-120.00EGP)"
+                                const formatted = `-${amountAbs}EGP`;
                                 return (
                                     <li key={t.id} className="py-2 flex justify-between text-sm">
                                         <span className="text-gray-700">{t.description || 'Transaction'}</span>
-                                        <span className={`font-semibold ${amountClass}`}>
+                                        <span className={`font-semibold text-red-600 ${amountClass}`}>
                                             {formatted}
                                         </span>
                                     </li>
