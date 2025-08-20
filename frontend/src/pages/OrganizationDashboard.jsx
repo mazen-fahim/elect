@@ -81,7 +81,7 @@ let OrganizationDashboard = () => {
         } catch {}
     }, []);
 
-    // Handle Create Election click: always go to payment and reopen modal after success
+    // Handle Create Election click: go to payment first, then reopen create after success
     const handleCreateElectionClick = async () => {
         try { localStorage.setItem('afterPaymentOpenCreate', '1'); } catch {}
         navigate('/org/payment');

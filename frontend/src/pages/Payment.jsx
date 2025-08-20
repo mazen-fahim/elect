@@ -19,7 +19,7 @@ const Payment = () => {
   const [zip, setZip] = useState('');
 
   const formatCardNumber = (val) => {
-    const digits = String(val || '').replace(/\D/g, '').slice(0, 19); // max 19 digits
+    const digits = String(val || '').replace(/\D/g, '').slice(0, 16); // max 16 digits
     const groups = digits.match(/.{1,4}/g) || [];
     return groups.join(' ');
   };
@@ -146,6 +146,7 @@ const Payment = () => {
                     onChange={handleCardNumberChange}
                     className="flex-1 px-4 py-2 outline-none"
                     aria-label="Card number"
+                    maxLength={19}
                   />
                   <div className="px-3 flex items-center gap-2 text-gray-400">
                     {/* Visa icon */}
