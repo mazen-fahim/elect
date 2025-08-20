@@ -240,10 +240,9 @@ const electionApi = {
   },
 };
 const voterApi = {
-  requestOtp: async ({ electionId, phoneNumber, nationalId }) => {
+  requestOtp: async ({ electionId, nationalId }) => {
     const params = new URLSearchParams();
     params.append('election_id', electionId);
-    params.append('phone_number', phoneNumber);
     if (nationalId) params.append('national_id', nationalId);
     return apiRequest(`/voters/login/request-otp?${params.toString()}`, { method: 'POST' });
   },
@@ -253,6 +252,39 @@ const voterApi = {
     params.append('code', code);
     if (nationalId) params.append('national_id', nationalId);
     return apiRequest(`/voters/login/verify-otp?${params.toString()}`, { method: 'POST' });
+  },
+};
+
+const votingApi = {
+  getElectionCandidates: async (electionId) => {
+    return apiRequest(`/voting/election/${electionId}/candidates`);
+  },
+  
+  castVote: async (electionId, voteRequest) => {
+    return apiRequest(`/voting/election/${electionId}/vote`, {
+      method: 'POST',
+      body: JSON.stringify(voteRequest),
+    });
+  },
+  
+  getVoterVotingStatus: async (electionId, voterHashedNationalId) => {
+    return apiRequest(`/voting/election/${electionId}/voter/${voterHashedNationalId}/status`);
+  },
+};
+
+const resultsApi = {
+  getElectionResults: async (electionId) => {
+    return apiRequest(`/results/election/${electionId}`);
+  },
+  
+  getElectionSummary: async (electionId) => {
+    return apiRequest(`/results/election/${electionId}/summary`);
+  },
+  
+  finalizeElectionResults: async (electionId) => {
+    return apiRequest(`/results/election/${electionId}/finalize`, {
+      method: 'POST',
+    });
   },
 };
 
@@ -455,5 +487,5 @@ const api = {
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi, votingApi, resultsApi };
 

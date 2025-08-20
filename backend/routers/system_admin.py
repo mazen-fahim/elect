@@ -12,8 +12,27 @@ from models.organization_admin import OrganizationAdmin
 from models.user import User
 from models.notification import Notification
 from models.verification_token import VerificationToken
+from core.scheduler import sync_election_statuses
 
 router = APIRouter(prefix="/SystemAdmin", tags=["SystemAdmin"])
+
+
+@router.post("/elections/sync-statuses", status_code=status.HTTP_200_OK)
+async def sync_election_statuses_endpoint(
+    _: admin_dependency,
+):
+    """Admin-only: Manually sync all election statuses to fix any inconsistencies."""
+    try:
+        updated_count = await sync_election_statuses()
+        return {
+            "message": "Election statuses synced successfully",
+            "updated_count": updated_count
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync election statuses: {str(e)}"
+        )
 
 
 @router.get("/dashboard/stats", status_code=status.HTTP_200_OK)
