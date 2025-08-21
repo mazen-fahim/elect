@@ -83,23 +83,38 @@ async def login(login_request: LoginRequest, db: db_dependency):
     response_model=CurrentUserResponse,
 )
 async def get_current_user_info(user: user_dependency, db: db_dependency):
-    """Get current user information"""
+    """Get current user information (supports organization and organization_admin roles)."""
     from sqlalchemy.future import select
     from models.organization import Organization
+    from models.organization_admin import OrganizationAdmin
 
-    # Get organization info if user is an organization
+    # Default values
     organization_id = None
     organization_name = None
 
-    if user.role.value in ["organization", "organization_admin"]:
+    # If the user is an organization (owns the organization record)
+    if user.role.value == "organization":
         result = await db.execute(select(Organization).where(Organization.user_id == user.id))
         organization = result.scalars().first()
         if organization:
-            organization_id = organization.user_id  # user_id is the primary key
+            organization_id = organization.user_id
             organization_name = organization.name
-        else:
-            # If no organization found, this shouldn't happen for valid organization users
-            pass
+
+    # If the user is an organization_admin, find the organization via organization_admins table
+    elif user.role.value == "organization_admin":
+        # Join Organization with OrganizationAdmin to find the organization for this admin user
+        stmt = (
+            select(Organization)
+            .join(OrganizationAdmin, Organization.user_id == OrganizationAdmin.organization_user_id)
+            .where(OrganizationAdmin.user_id == user.id)
+        )
+        result = await db.execute(stmt)
+        organization = result.scalars().first()
+        if organization:
+            organization_id = organization.user_id
+            organization_name = organization.name
+
+    # For admins or others, organization fields remain None
 
     return CurrentUserResponse(
         id=user.id,
@@ -109,6 +124,7 @@ async def get_current_user_info(user: user_dependency, db: db_dependency):
         organization_id=organization_id,
         organization_name=organization_name,
     )
+
 
 
 @router.post(

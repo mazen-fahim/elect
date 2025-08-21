@@ -96,11 +96,11 @@ const OrganizationAdminsTab = () => {
     
     try {
       // Update admin using real API
-      const response = await organizationAdminApi.updateOrganizationAdmin(editingAdmin.id, formData);
+      const response = await organizationAdminApi.updateOrganizationAdmin(editingAdmin.user_id, formData);
       
       // Update local state
       setAdmins(admins.map(admin => 
-        admin.id === editingAdmin.id 
+        admin.user_id === editingAdmin.user_id 
           ? { ...admin, email: formData.email, last_active: new Date().toISOString() }
           : admin
       ));
@@ -115,7 +115,7 @@ const OrganizationAdminsTab = () => {
   };
 
   const handleDeleteAdmin = async (adminId) => {
-    const admin = admins.find(a => a.id === adminId);
+    const admin = admins.find(a => a.user_id === adminId);
     setAdminToDelete(admin);
     setShowConfirmDelete(true);
   };
@@ -123,10 +123,10 @@ const OrganizationAdminsTab = () => {
   const confirmDeleteAdmin = async () => {
     try {
       // Delete admin using real API
-      await organizationAdminApi.deleteOrganizationAdmin(adminToDelete.id);
+      await organizationAdminApi.deleteOrganizationAdmin(adminToDelete.user_id);
       
       // Remove from local state
-      setAdmins(admins.filter(admin => admin.id !== adminToDelete.id));
+      setAdmins(admins.filter(admin => admin.user_id !== adminToDelete.user_id));
       showModal('Success', 'Organization admin deleted successfully', 'success');
     } catch (error) {
       showModal('Error', error.message || 'Failed to delete organization admin', 'error');
@@ -206,7 +206,7 @@ const OrganizationAdminsTab = () => {
       <div className="bg-white shadow overflow-hidden sm:rounded-md">
         <ul className="divide-y divide-gray-200">
           {admins.map((admin) => (
-            <li key={admin.id}>
+            <li key={admin.user_id}>
               <div className="px-4 py-4 sm:px-6">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -231,7 +231,7 @@ const OrganizationAdminsTab = () => {
                       Edit
                     </button>
                     <button
-                      onClick={() => handleDeleteAdmin(admin.id)}
+                      onClick={() => handleDeleteAdmin(admin.user_id)}
                       className="inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                     >
                       <Trash2 className="h-4 w-4 mr-1" />

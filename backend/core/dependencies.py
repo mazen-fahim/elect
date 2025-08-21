@@ -61,14 +61,16 @@ def get_admin(user: user_dependency):
 admin_dependency = Annotated[User, Depends(get_admin)]
 
 
-async def get_organization_context(user: user_dependency, db: db_dependency):
+async def get_organization(user: user_dependency, db: db_dependency):
     """
     Allow both the organization boss and organization admins to access org-protected endpoints.
-    Returns an organization context object where `.id` is always the owning organization user ID.
+    Returns a context object where `.id` is always the owning organization user ID (organization's User.id).
+    Keeps `role` and common attributes for downstream checks/UI.
     """
     if user.role not in [UserRole.organization, UserRole.organization_admin]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
 
+    # If the user is the organization owner, pass through
     if user.role == UserRole.organization:
         return user
 
@@ -87,7 +89,7 @@ async def get_organization_context(user: user_dependency, db: db_dependency):
     return user
 
 
-organization_dependency = Annotated[User, Depends(get_organization_context)]
+organization_dependency = Annotated[User, Depends(get_organization)]
 
 
 # -------------------- Request Helpers --------------------
