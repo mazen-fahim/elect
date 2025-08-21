@@ -60,9 +60,21 @@ services:
     ports:
       - "6379:6379"
 
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: emad@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
 # volume postgres_data if it doesn't already exist.
 # This is because one or more services reference this volume in their configuration.
 volumes:
   # Using a named volume for your database is best practice
   # to ensure your data persists independently of the container lifecycle.
   postgres_data:
+  pgadmin_data:
