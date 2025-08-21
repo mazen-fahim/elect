@@ -8,6 +8,8 @@ from .approval_request import ApprovalRequest
 from .verification_token import VerificationToken
 from .voter import Voter
 from .voting_process import VotingProcess
+from .dummy_candidate import DummyCandidate
+from .dummy_voter import DummyVoter
 
 __all__ = [
     "Candidate",
@@ -20,4 +22,6 @@ __all__ = [
     "VerificationToken",
     "Voter",
     "VotingProcess",
+    "DummyCandidate",
+    "DummyVoter",
 ]

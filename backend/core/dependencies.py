@@ -61,7 +61,7 @@ def get_admin(user: user_dependency):
 admin_dependency = Annotated[User, Depends(get_admin)]
 
 
-async def get_organization(user: user_dependency):
+async def get_organization_context(user: user_dependency, db: db_dependency):
     """
     Allow both the organization boss and organization admins to access org-protected endpoints.
     Returns an organization context object where `.id` is always the owning organization user ID.
@@ -72,11 +72,22 @@ async def get_organization(user: user_dependency):
     if user.role == UserRole.organization:
         return user
 
-    # For organization_admin: return the user object
+    # For organization_admin: get the organization they manage
+    from models.organization_admin import OrganizationAdmin
+    admin_result = await db.execute(
+        select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id)
+    )
+    admin = admin_result.scalar_one_or_none()
+    
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin not found")
+    
+    # Return the organization context (admin user with organization_id set to the managed org)
+    user.organization_id = admin.organization_user_id
     return user
 
 
-organization_dependency = Annotated[User, Depends(get_organization)]
+organization_dependency = Annotated[User, Depends(get_organization_context)]
 
 
 # -------------------- Request Helpers --------------------

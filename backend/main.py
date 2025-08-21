@@ -23,6 +23,7 @@ from routers import (
     voter,
     voting_process,
 )
+from routers.dummy_service import router as dummy_service_router
 from routers.voting import router as voting_router
 from routers.results import router as results_router
 from core.scheduler import start_election_status_scheduler, stop_election_status_scheduler
@@ -77,5 +78,6 @@ api_router.include_router(auth)
 api_router.include_router(organization_admin)
 api_router.include_router(approval)
 api_router.include_router(home)
+api_router.include_router(dummy_service_router)
 
 app.include_router(api_router)
