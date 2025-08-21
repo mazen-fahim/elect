@@ -567,7 +567,8 @@ let OrganizationDashboard = () => {
         { id: 'elections', label: 'Elections', icon: Vote },
         { id: 'candidates', label: 'Candidates', icon: Users },
         ...(user.role === 'organization' ? [{ id: 'admins', label: 'Admins', icon: Shield }] : []),
-        { id: 'notifications', label: 'Notifications', icon: Bell },
+        // إخفاء تبويب Notifications من Organization Admin فقط
+        ...(user.role !== 'organization_admin' ? [{ id: 'notifications', label: 'Notifications', icon: Bell }] : []),
     ];
 
     // Display user role correctly
@@ -631,7 +632,7 @@ let OrganizationDashboard = () => {
                    </div>
                 )}
 
-                {activeTab === 'notifications' && (
+                {activeTab === 'notifications' && user.role !== 'organization_admin' && (
                    <div className="space-y-6">
                      <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
                      <NotificationList organizationId={organization.id} />
