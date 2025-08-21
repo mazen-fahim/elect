@@ -61,19 +61,28 @@ def get_admin(user: user_dependency):
 admin_dependency = Annotated[User, Depends(get_admin)]
 
 
-async def get_organization(user: user_dependency):
+async def get_organization(user: user_dependency, db: db_dependency):
     """
     Allow both the organization boss and organization admins to access org-protected endpoints.
-    Returns an organization context object where `.id` is always the owning organization user ID.
+    Returns a context object where `.id` is always the owning organization user ID (organization's User.id).
+    Keeps `role` and common attributes for downstream checks/UI.
     """
     if user.role not in [UserRole.organization, UserRole.organization_admin]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
 
+    # If the user is the organization owner, pass through
     if user.role == UserRole.organization:
         return user
 
-    # For organization_admin: return the user object
-    return user
+    # Map organization_admin to owning organization user_id
+    result = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id))
+    mapping = result.scalar_one_or_none()
+    if not mapping:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization mapping not found for admin")
+
+    # Create a lightweight context preserving role/email but with id set to the owning organization user_id
+    return SimpleNamespace(id=mapping.organization_user_id, role=user.role, email=getattr(user, "email", None))
+
 
 
 organization_dependency = Annotated[User, Depends(get_organization)]

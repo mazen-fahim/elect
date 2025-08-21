@@ -8,6 +8,7 @@ from core.dependencies import db_dependency, organization_dependency, admin_depe
 from models.organization import Organization
 from models.election import Election
 from models.user import User
+from models.organization_admin import OrganizationAdmin
 from models.candidate import Candidate
 from schemas.organization import OrganizationDashboardStats, RecentElection
 
@@ -23,37 +24,28 @@ async def get_all_organizations(db: db_dependency):
 @router.get("/dashboard-stats", response_model=OrganizationDashboardStats)
 async def get_organization_dashboard_stats(user: organization_dependency, db: db_dependency):
     """Get dashboard statistics for the authenticated organization"""
-    
-    # Get the organization for the logged-in user
-    org_result = await db.execute(
-        select(Organization).where(Organization.user_id == user.id)
-    )
-    organization = org_result.scalar_one_or_none()
-    
-    if not organization:
-        raise HTTPException(status_code=404, detail="Organization not found")
-    
-    organization_id = organization.user_id
-    
-    # Get total elections count
+
+    # organization_dependency guarantees `.id` is the owning organization user_id for both
+    # organization and organization_admin roles
+    organization_id = user.id
+
+    # Totals
     elections_result = await db.execute(
         select(func.count(Election.id)).where(Election.organization_id == organization_id)
     )
     total_elections = elections_result.scalar() or 0
-    
-    # Get total candidates count
+
     candidates_result = await db.execute(
         select(func.count(Candidate.hashed_national_id)).where(Candidate.organization_id == organization_id)
     )
     total_candidates = candidates_result.scalar() or 0
-    
-    # Get total votes count (sum of all votes across all elections)
+
     votes_result = await db.execute(
-        select(func.sum(Election.total_vote_count)).where(Election.organization_id == organization_id)
+        select(func.coalesce(func.sum(Election.total_vote_count), 0)).where(Election.organization_id == organization_id)
     )
     total_votes = votes_result.scalar() or 0
-    
-    # Get recent elections (last 3)
+
+    # Recent elections (last 3)
     recent_elections_result = await db.execute(
         select(Election)
         .where(Election.organization_id == organization_id)
@@ -61,12 +53,12 @@ async def get_organization_dashboard_stats(user: organization_dependency, db: db
         .limit(3)
     )
     recent_elections = recent_elections_result.scalars().all()
-    
+
     return OrganizationDashboardStats(
         total_elections=total_elections,
         total_candidates=total_candidates,
         total_votes=total_votes,
-        recent_elections=[RecentElection.model_validate(election) for election in recent_elections]
+        recent_elections=[RecentElection.model_validate(election) for election in recent_elections],
     )
 
 
@@ -149,18 +141,16 @@ async def admin_get_org_elections_grouped(
         else:
             key = "finished"
 
-        grouped[key].append(
-            {
-                "id": e.id,
-                "title": e.title,
-                "types": e.types,
-                "starts_at": e.starts_at,
-                "ends_at": e.ends_at,
-                "created_at": e.created_at,
-                "total_vote_count": e.total_vote_count,
-                "number_of_candidates": e.number_of_candidates,
-            }
-        )
+        grouped[key].append({
+            "id": e.id,
+            "title": e.title,
+            "types": e.types,
+            "starts_at": e.starts_at,
+            "ends_at": e.ends_at,
+            "created_at": e.created_at,
+            "total_vote_count": e.total_vote_count,
+            "number_of_candidates": e.number_of_candidates,
+        })
 
     return {
         "organization": {"id": organization.user_id, "name": organization.name},
