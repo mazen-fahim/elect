@@ -46,3 +46,6 @@ urllib3==2.5.0
 uvicorn==0.35.0
 twilio==8.10.0
 APScheduler==3.10.4
+numpy 
+pandas
+scikit-learn
