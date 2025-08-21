@@ -307,3 +307,43 @@ async def update_org_admin(
         first_name=user_first_name, 
         last_name=user_last_name
     )
+
+class OrgAdminOverview(BaseModel):
+    organization_name: str
+    organization_description: str | None
+    total_elections: int
+    total_candidates: int
+    total_notifications: int
+
+
+@router.get("/me/overview", response_model=OrgAdminOverview)
+async def get_org_admin_overview(db: db_dependency, current_user: organization_dependency):
+    if current_user.role != UserRole.organization_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only organization admins can access this")
+
+    # Get mapping
+    mapping_res = await db.execute(
+        select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
+    )
+    mapping = mapping_res.scalar_one_or_none()
+    if not mapping:
+        raise HTTPException(status_code=404, detail="Organization mapping not found")
+
+    # Get organization
+    org_res = await db.execute(select(Organization).where(Organization.user_id == mapping.organization_user_id))
+    org = org_res.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Counts
+    total_elections = len(org.elections)
+    total_candidates = len(org.candidates)
+    total_notifications = len(org.notifications)
+
+    return OrgAdminOverview(
+        organization_name=org.name,
+        organization_description=org.description,
+        total_elections=total_elections,
+        total_candidates=total_candidates,
+        total_notifications=total_notifications,
+    )
