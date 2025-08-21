@@ -68,51 +68,22 @@ const CandidateDetails = ({ candidate, isOpen, onClose, onUpdated, onDeleted }) 
     try {
       setSaving(true);
       
-      // Use FormData if files are provided, otherwise use JSON
-      if (photoFile || symbolIconFile) {
-        const formData = new FormData();
-        
-        // Add form fields
-        Object.keys(form).forEach(key => {
-          if (form[key] !== '' && form[key] !== null && form[key] !== undefined) {
-            formData.append(key, form[key]);
-          }
-        });
-        
-        // Add files if provided
-        if (photoFile) {
-          formData.append('photo', photoFile);
+      // Always use FormData-based endpoint to match backend expectations
+      const formData = new FormData();
+      // Add form fields (skip empty)
+      Object.keys(form).forEach(key => {
+        const val = form[key];
+        if (val !== '' && val !== null && val !== undefined) {
+          formData.append(key, val);
         }
-        if (symbolIconFile) {
-          formData.append('symbol_icon', symbolIconFile);
-        }
-        
-        // Call the new endpoint with file support
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost/api'}/candidates/${candidate.hashed_national_id}/with-files`, {
-          method: 'PUT',
-          headers: {
-            ...(localStorage.getItem('authToken') ? { Authorization: `Bearer ${localStorage.getItem('authToken')}` } : {})
-          },
-          body: formData
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || 'Failed to save candidate');
-        }
-        
-        const updated = await response.json();
-        setEditing(false);
-        onUpdated && onUpdated(updated);
-      } else {
-        // No files, use existing JSON API
-        const payload = { ...form };
-        // remove empty strings
-        Object.keys(payload).forEach(k => (payload[k] === '' || payload[k] === null) && delete payload[k]);
-        const updated = await candidateApi.update(candidate.hashed_national_id, payload);
-        setEditing(false);
-        onUpdated && onUpdated(updated);
-      }
+      });
+      // Add files if provided
+      if (photoFile) formData.append('photo', photoFile);
+      if (symbolIconFile) formData.append('symbol_icon', symbolIconFile);
+
+      const updated = await candidateApi.updateWithFiles(candidate.hashed_national_id, formData);
+      setEditing(false);
+      onUpdated && onUpdated(updated);
     } catch (e) {
       showModal('Error', e?.message || 'Failed to save candidate', 'error');
     } finally {

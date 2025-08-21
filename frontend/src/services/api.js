@@ -11,11 +11,34 @@ class ApiError extends Error {
 const apiRequest = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
 
+  // Normalize headers and body; auto-handle JSON vs FormData
+  const headers = {
+    ...options.headers,
+  };
+
+  let body = options.body;
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const isBlob = typeof Blob !== 'undefined' && body instanceof Blob;
+  const isArrayBuffer = typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer;
+
+  // If caller passed a plain object/array/primitive, JSON-encode it
+  if (body !== undefined && body !== null && !isFormData && !isBlob && !isArrayBuffer && typeof body !== 'string') {
+    body = JSON.stringify(body);
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  }
+
+  // If FormData, let browser set the boundary; remove any explicit content-type
+  if (isFormData) {
+    if ('Content-Type' in headers) delete headers['Content-Type'];
+  } else {
+    headers['Content-Type'] = headers['Content-Type'] || headers['content-type'] || (typeof body === 'string' ? 'application/json' : headers['Content-Type']);
+    if ('content-type' in headers) delete headers['content-type'];
+  }
+
   const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    method: options.method || 'GET',
+    headers,
+    body,
     ...options,
   };
 
@@ -29,7 +52,11 @@ const apiRequest = async (endpoint, options = {}) => {
     const response = await fetch(url, config);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      // Try to parse JSON error; fallback to text
+      let errorData = await response.json().catch(async () => {
+        const text = await response.text().catch(() => '');
+        return text ? { detail: text } : {};
+      });
 
       // Convert backend error codes to user-friendly messages
       let errorMessage = errorData.detail || errorData.error_message || `HTTP ${response.status}: ${response.statusText}`;
@@ -74,7 +101,7 @@ const apiRequest = async (endpoint, options = {}) => {
       );
     }
 
-    // Handle no content responses
+  // Handle no content responses
     if (response.status === 204) {
       return null;
     }
@@ -285,8 +312,38 @@ const candidateApi = {
   update: async (hashedId, data) => {
     return apiRequest(`/candidates/${hashedId}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: data,
     });
+  },
+
+  // Create candidate with files (multipart/form-data)
+  createWithFiles: async (formData) => {
+    const url = `${API_BASE_URL}/candidates/`;
+    const config = { method: 'POST', body: formData, headers: {} };
+    const token = localStorage.getItem('authToken');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(url, config);
+    if (!res.ok) {
+      let errData;
+      try { errData = await res.json(); } catch { errData = { detail: await res.text().catch(() => '') }; }
+      throw new ApiError(errData.detail || 'Failed to create candidate', res.status, errData);
+    }
+    return res.json();
+  },
+
+  // Update candidate with files (multipart/form-data)
+  updateWithFiles: async (hashedId, formData) => {
+    const url = `${API_BASE_URL}/candidates/${hashedId}/with-files`;
+    const config = { method: 'PUT', body: formData, headers: {} };
+    const token = localStorage.getItem('authToken');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(url, config);
+    if (!res.ok) {
+      let errData;
+      try { errData = await res.json(); } catch { errData = { detail: await res.text().catch(() => '') }; }
+      throw new ApiError(errData.detail || 'Failed to update candidate', res.status, errData);
+    }
+    return res.json();
   },
 
   delete: async (hashedId) => {
@@ -467,11 +524,11 @@ const api = {
   get: (endpoint) => apiRequest(endpoint),
   post: (endpoint, data) => apiRequest(endpoint, {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: data,
   }),
   put: (endpoint, data) => apiRequest(endpoint, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: data,
   }),
   delete: (endpoint) => apiRequest(endpoint, {
     method: 'DELETE',

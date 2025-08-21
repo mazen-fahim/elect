@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, status, Query, Depends
+from fastapi import APIRouter, HTTPException, status, Query, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -72,7 +72,8 @@ async def get_notifications(
             conditions.append(Notification.election_id == election_id)
         
         if days_ago is not None:
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_ago)
+            # Use naive UTC to match TIMESTAMP WITHOUT TIME ZONE columns
+            cutoff_date = datetime.utcnow() - timedelta(days=days_ago)
             conditions.append(Notification.created_at >= cutoff_date)
         
         # Execute query - don't use selectinload for election to avoid broken relationship issues
@@ -290,6 +291,30 @@ async def get_notification(
         )
 
 
+@router.patch("/mark-all-read", response_model=dict)
+async def mark_all_notifications_read(
+    db: db_dependency,
+    current_user: organization_dependency,
+    request: NotificationMarkAllReadRequest | None = Body(None),
+):
+    """Mark all notifications as read for the current organization"""
+    
+    # Accept missing body and default to True for compatibility
+    if request is not None and not request.mark_all_read:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="mark_all_read must be true"
+        )
+    
+    notification_service = NotificationService(db)
+    count = await notification_service.mark_all_as_read(current_user.id)
+    
+    return {
+        "message": f"Marked {count} notifications as read",
+        "notifications_marked": count
+    }
+
+
 @router.patch("/{notification_id}", response_model=NotificationRead)
 async def update_notification(
     notification_id: int,
@@ -320,7 +345,8 @@ async def update_notification(
         if field == "is_read" and value and not notification.is_read:
             # Mark as read
             notification.is_read = True
-            notification.read_at = datetime.now(timezone.utc)
+            # Use naive UTC for TIMESTAMP WITHOUT TIME ZONE
+            notification.read_at = datetime.utcnow()
         elif field == "is_read" and not value and notification.is_read:
             # Mark as unread
             notification.is_read = False
@@ -378,28 +404,6 @@ async def update_notification(
     
     return NotificationRead(**notification_data)
 
-
-@router.patch("/mark-all-read", response_model=dict)
-async def mark_all_notifications_read(
-    request: NotificationMarkAllReadRequest,
-    db: db_dependency,
-    current_user: organization_dependency
-):
-    """Mark all notifications as read for the current organization"""
-    
-    if not request.mark_all_read:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="mark_all_read must be true"
-        )
-    
-    notification_service = NotificationService(db)
-    count = await notification_service.mark_all_as_read(current_user.id)
-    
-    return {
-        "message": f"Marked {count} notifications as read",
-        "notifications_marked": count
-    }
 
 
 @router.delete("/{notification_id}")

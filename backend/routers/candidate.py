@@ -22,6 +22,50 @@ from schemas.notification import CandidateNotificationData
 router = APIRouter(prefix="/candidates", tags=["Candidate"])
 
 
+# Helper: build a safe snapshot dict of a candidate without touching ORM lazy-loading
+async def _candidate_snapshot(db, organization_id: int, hashed_national_id: str) -> dict | None:
+    from models.candidate import Candidate as Cand
+    stmt = (
+        select(
+            Cand.hashed_national_id,
+            Cand.name,
+            Cand.district,
+            Cand.governorate,
+            Cand.country,
+            Cand.party,
+            Cand.organization_id,
+            Cand.symbol_icon_url,
+            Cand.symbol_name,
+            Cand.photo_url,
+            Cand.birth_date,
+            Cand.description,
+            Cand.created_at,
+        )
+        .where(Cand.hashed_national_id == hashed_national_id)
+        .where(Cand.organization_id == organization_id)
+    )
+    row = (await db.execute(stmt)).first()
+    if not row:
+        return None
+    m = row._mapping
+    return CandidateRead(
+        hashed_national_id=m[Cand.hashed_national_id],
+        name=m[Cand.name],
+        district=m[Cand.district],
+        governorate=m[Cand.governorate],
+        country=m[Cand.country],
+        party=m[Cand.party],
+        organization_id=m[Cand.organization_id],
+        symbol_icon_url=m[Cand.symbol_icon_url],
+        symbol_name=m[Cand.symbol_name],
+        photo_url=m[Cand.photo_url],
+        birth_date=m[Cand.birth_date],
+        description=m[Cand.description],
+        created_at=m[Cand.created_at],
+        participations=None,
+    ).model_dump()
+
+
 # @router.post("/", response_model=CandidateRead, status_code=status.HTTP_201_CREATED)
 # async def create_candidate(candidate_in: CandidateCreate, db: db_dependency):
 #     existing_candidate = (
@@ -266,7 +310,23 @@ async def create_candidate(
         try:
             await db.commit()
             await db.refresh(new_candidate)
-            return new_candidate
+            # Build a concrete response object to avoid lazy-loading during serialization
+            response_obj = CandidateCreateResponse(
+                hashed_national_id=new_candidate.hashed_national_id,
+                name=new_candidate.name,
+                district=new_candidate.district,
+                governorate=new_candidate.governorate,
+                country=new_candidate.country,
+                party=new_candidate.party,
+                organization_id=new_candidate.organization_id,
+                symbol_icon_url=new_candidate.symbol_icon_url,
+                symbol_name=new_candidate.symbol_name,
+                photo_url=new_candidate.photo_url,
+                birth_date=new_candidate.birth_date,
+                description=new_candidate.description,
+                created_at=new_candidate.created_at,
+            )
+            return response_obj.model_dump()
         except IntegrityError as e:
             await db.rollback()
             if "duplicate key value violates unique constraint" in str(e) or "already exists" in str(e):
@@ -341,17 +401,21 @@ async def update_candidate(
     await db.commit()
     await db.refresh(candidate)
 
-    # Create notification for candidate update
+    # Build snapshot first (safe SELECT) and use it for notification and response
+    snap = await _candidate_snapshot(db, organization_id, hashed_national_id)
+    if snap is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
     if changes_made:
         notification_service = NotificationService(db)
         candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate.hashed_national_id, candidate_name=candidate.name, changes_made=changes_made
+            candidate_id=hashed_national_id,
+            candidate_name=snap.get("name"),
+            changes_made=changes_made,
         )
         await notification_service.create_candidate_updated_notification(
             organization_id=organization_id, candidate_data=candidate_notification_data
         )
-
-    return candidate
+    return snap
 
 
 @router.put("/{hashed_national_id}/with-files", response_model=CandidateRead)
@@ -448,7 +512,10 @@ async def update_candidate_with_files(
     await db.commit()
     await db.refresh(candidate)
 
-    # Create notification for candidate update (including file uploads)
+    # Build snapshot once and use it for both notification and response
+    snap = await _candidate_snapshot(db, organization_id, hashed_national_id)
+    if snap is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
     if changes_made or photo or symbol_icon:
         if photo:
             changes_made.append("photo")
@@ -457,13 +524,14 @@ async def update_candidate_with_files(
 
         notification_service = NotificationService(db)
         candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate.hashed_national_id, candidate_name=candidate.name, changes_made=changes_made
+            candidate_id=hashed_national_id,
+            candidate_name=snap.get("name"),
+            changes_made=changes_made,
         )
         await notification_service.create_candidate_updated_notification(
             organization_id=organization_id, candidate_data=candidate_notification_data
         )
-
-    return candidate
+    return snap
 
 
 class ParticipationsUpdate(BaseModel):
@@ -545,7 +613,10 @@ async def set_candidate_participations(
 
     await db.commit()
     await db.refresh(candidate)
-    return candidate
+    snap = await _candidate_snapshot(db, organization_id, hashed_national_id)
+    if snap is None:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    return snap
 
 
 @router.delete("/{hashed_national_id}", status_code=204)
