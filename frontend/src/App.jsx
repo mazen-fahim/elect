@@ -12,6 +12,7 @@ import VoterExperience from './pages/VoterExperience';
 import ElectionResults from './pages/ElectionResults';
 import VoterLogin from './pages/VoterLogin';
 import VotingPage from './pages/VotingPage';
+import DummyServiceManagement from './pages/DummyServiceManagement';
 
 
 
@@ -31,6 +32,8 @@ function App() {
                     <Route path="/vote/:electionId" element={<VoterLogin />} />
                     <Route path="/vote/:electionId/voting" element={<VotingPage />} />
                     <Route path="/results/:electionId" element={<ElectionResults />} />
+                    {/* Admin-only route for testing dummy service */}
+                    <Route path="/dummy-service" element={<DummyServiceManagement />} />
 
                 </Routes>
             </div>

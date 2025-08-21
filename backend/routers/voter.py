@@ -13,8 +13,10 @@ from core.dependencies import db_dependency, get_twilio_client
 from core.settings import settings
 from models.voter import Voter
 from models.voting_process import VotingProcess
+from models.election import Election
 from twilio.http.async_http_client import AsyncTwilioHttpClient  # Add this import
 from schemas.voter import VoterCreate, VoterOut, VoterUpdate
+from services.api_election_service import APIElectionService
 
 router = APIRouter(prefix="/voters", tags=["voters"])
 
@@ -129,18 +131,21 @@ async def update_voter(voter_id: str, election_id: int, voter_data: VoterUpdate,
     voter = result.scalar_one_or_none()
     if not voter:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voter not found")
+    
     # Prevent modification of certain fields
     if any(field in voter_data.model_dump(exclude_unset=True) for field in ["voter_hashed_national_id", "election_id"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot modify voter_hashed_national_id or election_id"
         )
 
+    # Update voter fields
     for field, value in voter_data.model_dump(exclude_unset=True).items():
         setattr(voter, field, value)
-
+    
     await db.commit()
     await db.refresh(voter)
-    # Set election title after refresh to avoid expired ORM issues
+    
+    # Set election title after refresh to avoid expired ORM object issues
     voter.election_title = voter.election.title
     return voter
 
@@ -213,29 +218,78 @@ async def request_voter_otp(
     code = ""  # Define code to be accessible for SMS sending
     # Database operations
     try:
-        result = await db.execute(
-            select(Voter).where(
-                Voter.voter_hashed_national_id == voter_hashed_id, Voter.election_id == election_id
-            )
+        # First, get the election to check if it's API-based
+        election_result = await db.execute(
+            select(Election).where(Election.id == election_id)
         )
-        voter = result.scalar_one_or_none()
-
-        if not voter:
-            # Voter not found - they are not allowed to vote in this election
+        election = election_result.scalar_one_or_none()
+        
+        if not election:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, 
-                detail="You are not allowed to vote on this election. Please contact your organization administrator."
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Election not found"
             )
-        else:
-            # Voter exists, use stored phone number
-            phone_number = voter.phone_number
+        
+        # Check if this is an API-based election
+        if election.method == "api" and election.api_endpoint:
+            # Handle API-based election
+            api_service = APIElectionService(db)
             
-            # Rate limiting: 3 minutes between OTP requests
-            if voter.otp_code and voter.otp_expires_at and voter.otp_expires_at > datetime.now(timezone.utc):
+            # For API elections, we need the national ID (not hashed) to call the org's API
+            if not national_id:
                 raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Please wait before requesting a new OTP"
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="For API-based elections, please provide the national ID (not hashed)"
                 )
-            voter.is_verified = False  # Reset verification status on new OTP request
+            
+            # Verify voter via organization's API
+            api_response = await api_service.verify_voter_via_api(election, national_id)
+            
+            if not api_response.is_eligible:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=api_response.error_message or "You are not eligible to vote in this election"
+                )
+            
+            # Create or update voter record from API response
+            try:
+                voter = await api_service.create_voter_from_api_response(
+                    election_id, national_id, api_response
+                )
+                phone_number = voter.phone_number
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Error creating voter from API response: {str(e)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Failed to process voter information from organization API"
+                )
+        else:
+            # Handle CSV-based election (existing logic)
+            result = await db.execute(
+                select(Voter).where(
+                    Voter.voter_hashed_national_id == voter_hashed_id, Voter.election_id == election_id
+                )
+            )
+            voter = result.scalar_one_or_none()
+
+            if not voter:
+                # Voter not found - they are not allowed to vote in this election
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, 
+                    detail="You are not allowed to vote on this election. Please contact your organization administrator."
+                )
+            else:
+                # Voter exists, use stored phone number
+                phone_number = voter.phone_number
+                
+                # Rate limiting: 3 minutes between OTP requests
+                if voter.otp_code and voter.otp_expires_at and voter.otp_expires_at > datetime.now(timezone.utc):
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Please wait before requesting a new OTP"
+                    )
+                voter.is_verified = False  # Reset verification status on new OTP request
 
         # Generate 6-digit OTP and set expiry
         code = f"{random.randint(100000, 999999)}"

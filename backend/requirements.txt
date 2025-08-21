@@ -49,3 +49,4 @@ APScheduler==3.10.4
 numpy 
 pandas
 scikit-learn
+aiohttp>=3.8.0
