@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield } from 'lucide-react';
@@ -7,24 +7,31 @@ import ElectionsList from "../components/ElectionsList";
 import NotificationList from "../components/NotificationList";
 import Modal from "../components/Modal";
 import OrganizationAdminsTab from "../components/OrganizationAdminsTab";
-
 import { useOrganizationDashboardStats } from '../hooks/useOrganization';
-
-
+import { electionApi } from '../services/api';
 
 let OrganizationDashboard = () => {
     let { id } = useParams();
     let { user, isLoading, organizations, elections, candidates, addElection, addCandidate, notifications } = useApp();
     let [activeTab, setActiveTab] = useState('overview');
     let [showCreateElection, setShowCreateElection] = useState(false);
-
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
+    let [isCreatingElection, setIsCreatingElection] = useState(false);
+    let [orgElections, setOrgElections] = useState([]);
     
     // Modal state
     let [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
 
     // Fetch dashboard stats from API
-    const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useOrganizationDashboardStats();
+    const { data: dashboardStats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useOrganizationDashboardStats();
+
+    // Fetch elections for this organization
+    useEffect(() => {
+        if (user && user.organizationId) {
+            const filteredElections = elections.filter((e) => e.organizationId === user.organizationId.toString());
+            setOrgElections(filteredElections);
+        }
+    }, [elections, user]);
 
     // Helper function to show modals
     let showModal = (title, message, type = 'info') => {
@@ -47,13 +54,13 @@ let OrganizationDashboard = () => {
         );
     }
 
-    // Check if user is logged in and is an organization
-    if (!user || user.role !== 'organization') {
+    // Check if user is logged in and is an organization OR organization_admin
+    if (!user || (user.role !== 'organization' && user.role !== 'organization_admin')) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-                    <p className="text-gray-600">You must be logged in as an organization to access this page.</p>
+                    <p className="text-gray-600">You must be logged in as an organization or organization admin to access this page.</p>
                 </div>
             </div>
         );
@@ -80,11 +87,7 @@ let OrganizationDashboard = () => {
         id: userOrgId || urlOrgId,
         name: user.organizationName || 'Your Organization',
         email: user.email,
-        // Add other organization fields as needed
     };
-
-    let orgElections = elections.filter((e) => e.organizationId === (userOrgId || urlOrgId));
-    let orgCandidates = candidates.filter((c) => orgElections.some((e) => e.candidates.includes(c.id)));
 
     let CreateElectionModal = () => {
         let [formData, setFormData] = useState({
@@ -93,7 +96,7 @@ let OrganizationDashboard = () => {
             type: 'simple',
             startDate: '',
             endDate: '',
-            method: 'api', // 'api' or 'csv'
+            method: 'api',
             voterEligibilityUrl: '',
             candidatesFile: null,
             votersFile: null,
@@ -103,6 +106,7 @@ let OrganizationDashboard = () => {
 
         let handleSubmit = async (e) => {
             e.preventDefault();
+            setIsCreatingElection(true);
             
             // Client-side validation
             const now = new Date();
@@ -111,50 +115,67 @@ let OrganizationDashboard = () => {
             
             if (startDateTime < now) {
                 showModal('Invalid Date', 'Start date and time cannot be in the past.', 'error');
+                setIsCreatingElection(false);
                 return;
             }
             
             if (endDateTime < startDateTime) {
                 showModal('Invalid Date', 'End date and time must be after or equal to start date and time.', 'error');
+                setIsCreatingElection(false);
                 return;
             }
             
-            if (formData.method === 'csv') {
-                // Handle CSV upload
-                await handleCsvElectionCreation();
-            } else {
-                // Handle API method
-                await handleApiElectionCreation();
-            }
-        };
-
-        let handleApiElectionCreation = async () => {
             try {
-                const electionData = {
-                    title: formData.title,
-                    types: 'api_managed', // API will handle voting constraints
-                    starts_at: new Date(formData.startDate).toISOString(),
-                    ends_at: new Date(formData.endDate).toISOString(),
-                    num_of_votes_per_voter: formData.numVotesPerVoter,
-                    potential_number_of_voters: formData.potentialVoters,
-                    method: 'api',
-                    api_endpoint: formData.voterEligibilityUrl,
-                };
-
-                // Call API endpoint for election creation
-                const { electionApi } = await import('../services/api');
-                const newElection = await electionApi.create(electionData);
+                let newElection;
                 
-                // Add to local state (this will be replaced with react-query later)
+                if (formData.method === 'csv') {
+                    // Handle CSV upload
+                    if (!formData.candidatesFile || !formData.votersFile) {
+                        showModal('Missing Files', 'Please select both candidates and voters CSV files.', 'warning');
+                        setIsCreatingElection(false);
+                        return;
+                    }
+
+                    const formDataObj = new FormData();
+                    formDataObj.append('title', formData.title);
+                    formDataObj.append('types', formData.type);
+                    formDataObj.append('starts_at', new Date(formData.startDate).toISOString());
+                    formDataObj.append('ends_at', new Date(formData.endDate).toISOString());
+                    formDataObj.append('num_of_votes_per_voter', formData.numVotesPerVoter);
+                    formDataObj.append('potential_number_of_voters', formData.potentialVoters);
+                    formDataObj.append('candidates_file', formData.candidatesFile);
+                    formDataObj.append('voters_file', formData.votersFile);
+
+                    // Call CSV upload endpoint
+                    newElection = await electionApi.createWithCsv(formDataObj);
+                } else {
+                    // Handle API method
+                    const electionData = {
+                        title: formData.title,
+                        types: 'api_managed',
+                        starts_at: new Date(formData.startDate).toISOString(),
+                        ends_at: new Date(formData.endDate).toISOString(),
+                        num_of_votes_per_voter: formData.numVotesPerVoter,
+                        potential_number_of_voters: formData.potentialVoters,
+                        method: 'api',
+                        api_endpoint: formData.voterEligibilityUrl,
+                    };
+
+                    // Call API endpoint for election creation
+                    newElection = await electionApi.create(electionData);
+                }
+                
+                // Add to local state
                 addElection(newElection);
                 setShowCreateElection(false);
                 resetForm();
                 
+                // Refresh stats
+                refetchStats();
+                
+                showModal('Success', 'Election created successfully!', 'success');
             } catch (error) {
                 console.error('Error creating election:', error);
-                console.error('Full error object:', error);
-                console.error('Error response:', error.response);
-                console.error('Error message:', error.message);
                 
                 let errorMessage = 'Failed to create election. Please try again.';
                 if (error.message && error.message !== 'Server error. Please try again later.') {
@@ -164,49 +185,8 @@ let OrganizationDashboard = () => {
                 }
                 
                 showModal('Error', errorMessage, 'error');
-            }
-        };
-
-        let handleCsvElectionCreation = async () => {
-            try {
-                if (!formData.candidatesFile || !formData.votersFile) {
-                    showModal('Missing Files', 'Please select both candidates and voters CSV files.', 'warning');
-                    return;
-                }
-
-                const formDataObj = new FormData();
-                formDataObj.append('title', formData.title);
-                formDataObj.append('types', formData.type);
-                formDataObj.append('starts_at', new Date(formData.startDate).toISOString());
-                formDataObj.append('ends_at', new Date(formData.endDate).toISOString());
-                formDataObj.append('num_of_votes_per_voter', formData.numVotesPerVoter);
-                formDataObj.append('potential_number_of_voters', formData.potentialVoters);
-                formDataObj.append('candidates_file', formData.candidatesFile);
-                formDataObj.append('voters_file', formData.votersFile);
-
-                // Call CSV upload endpoint
-                const { electionApi } = await import('../services/api');
-                const newElection = await electionApi.createWithCsv(formDataObj);
-                
-                // Add to local state
-                addElection(newElection);
-                setShowCreateElection(false);
-                resetForm();
-                
-            } catch (error) {
-                console.error('Error creating election with CSV:', error);
-                console.error('Full error object:', error);
-                console.error('Error response:', error.response);
-                console.error('Error message:', error.message);
-                
-                let errorMessage = 'Failed to create election. Please check your CSV files and try again.';
-                if (error.message && error.message !== 'Server error. Please try again later.') {
-                    errorMessage = error.message;
-                } else if (error.response && error.response.detail) {
-                    errorMessage = error.response.detail;
-                }
-                
-                showModal('Error', errorMessage, 'error');
+            } finally {
+                setIsCreatingElection(false);
             }
         };
 
@@ -231,7 +211,7 @@ let OrganizationDashboard = () => {
                 <div className="bg-white rounded-xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                     <h3 className="text-2xl font-bold text-gray-900 mb-6">Create New Election</h3>
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* 1. Election Title */}
+                        {/* Election Title */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Election Title</label>
                             <input
@@ -243,7 +223,7 @@ let OrganizationDashboard = () => {
                             />
                         </div>
 
-                        {/* 2. Start Date & Time - End Date & Time */}
+                        {/* Start Date & Time - End Date & Time */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Start Date & Time</label>
@@ -271,7 +251,7 @@ let OrganizationDashboard = () => {
                             </div>
                         </div>
 
-                        {/* 3. Votes per Voter - Expected Voters */}
+                        {/* Votes per Voter - Expected Voters */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Votes per Voter</label>
@@ -297,7 +277,7 @@ let OrganizationDashboard = () => {
                             </div>
                         </div>
 
-                        {/* 4. How do you want to set up voters and candidates? */}
+                        {/* Method Selection */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-3">How do you want to set up voters and candidates?</label>
                             <div className="space-y-3">
@@ -351,7 +331,7 @@ let OrganizationDashboard = () => {
                             </div>
                         </div>
 
-                        {/* 5. Election Type (only show for CSV method) */}
+                        {/* Election Type (only show for CSV method) */}
                         {formData.method === 'csv' && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Election Type</label>
@@ -445,9 +425,19 @@ let OrganizationDashboard = () => {
                         <div className="flex space-x-4">
                             <button
                                 type="submit"
-                                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                                disabled={isCreatingElection}
+                                className={`flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium transition-all duration-200 ${
+                                    isCreatingElection ? 'opacity-50 cursor-not-allowed' : 'hover:from-blue-700 hover:to-purple-700'
+                                }`}
                             >
-                                Create Election
+                                {isCreatingElection ? (
+                                    <>
+                                        <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
+                                        Creating...
+                                    </>
+                                ) : (
+                                    'Create Election'
+                                )}
                             </button>
                             <button
                                 type="button"
@@ -463,8 +453,6 @@ let OrganizationDashboard = () => {
         );
     };
 
-
-
     let renderOverview = () => {
         if (statsLoading) {
             return (
@@ -479,16 +467,29 @@ let OrganizationDashboard = () => {
             return (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                     <p className="text-red-700">Failed to load dashboard statistics. Please try again later.</p>
+                    <button 
+                        onClick={refetchStats}
+                        className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                    >
+                        Retry
+                    </button>
                 </div>
             );
         }
 
         const stats = dashboardStats || {
-            total_elections: 0,
+            total_elections: orgElections.length,
             total_candidates: 0,
             total_votes: 0,
-            recent_elections: []
+            recent_elections: orgElections.slice(0, 5)
         };
+
+        // Calculate total candidates if not provided by API
+        if (stats.total_candidates === 0) {
+            stats.total_candidates = candidates.filter(c => 
+                orgElections.some(e => e.candidates && e.candidates.includes(c.id))
+            ).length;
+        }
 
         return (
             <div className="space-y-6">
@@ -532,7 +533,7 @@ let OrganizationDashboard = () => {
                                 <div key={election.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                                     <div>
                                         <h4 className="font-medium text-gray-900">{election.title}</h4>
-                                        <p className="text-sm text-gray-600">{election.total_vote_count} votes cast</p>
+                                        <p className="text-sm text-gray-600">{election.total_vote_count || 0} votes cast</p>
                                         <p className="text-xs text-gray-500">
                                             {new Date(election.starts_at).toLocaleDateString()} - {new Date(election.ends_at).toLocaleDateString()}
                                         </p>
@@ -547,9 +548,9 @@ let OrganizationDashboard = () => {
                                                       : 'bg-gray-100 text-gray-800'
                                             }`}
                                         >
-                                            {election.status}
+                                            {election.status || 'unknown'}
                                         </span>
-                                        <p className="text-xs text-gray-500 mt-1">{election.number_of_candidates} candidates</p>
+                                        <p className="text-xs text-gray-500 mt-1">{election.number_of_candidates || 0} candidates</p>
                                     </div>
                                 </div>
                             ))
@@ -560,22 +561,35 @@ let OrganizationDashboard = () => {
         );
     };
 
+    // Filter tabs based on user role
+    const tabs = [
+        { id: 'overview', label: 'Overview', icon: Vote },
+        { id: 'elections', label: 'Elections', icon: Vote },
+        { id: 'candidates', label: 'Candidates', icon: Users },
+        ...(user.role === 'organization' ? [{ id: 'admins', label: 'Admins', icon: Shield }] : []),
+        { id: 'notifications', label: 'Notifications', icon: Bell },
+    ];
+
+    // Display user role correctly
+    const userRoleDisplay = user.role === 'organization_admin' ? 'Organization Admin' : 'Organization';
+
     return (
         <div className="min-h-screen p-8">
             <div className="max-w-7xl mx-auto">
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900">{organization.name}</h1>
-                    <p className="text-gray-600">Organization Dashboard</p>
+                    <p className="text-gray-600">
+                        {userRoleDisplay} Dashboard
+                        {user.role === 'organization_admin' && (
+                            <span className="ml-2 text-sm bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                Admin
+                            </span>
+                        )}
+                    </p>
                 </div>
 
                 <div className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm border border-gray-200">
-                    {[
-                        { id: 'overview', label: 'Overview', icon: Vote },
-                        { id: 'elections', label: 'Elections', icon: Vote },
-                        { id: 'candidates', label: 'Candidates', icon: Users },
-                        { id: 'admins', label: 'Admins', icon: Shield },
-                        { id: 'notifications', label: 'Notifications', icon: Bell },
-                    ].map((tab) => {
+                    {tabs.map((tab) => {
                         const Icon = tab.icon;
                         return (
                             <button
@@ -597,31 +611,32 @@ let OrganizationDashboard = () => {
                 {activeTab === 'overview' && renderOverview()}
 
                 {activeTab === 'elections' && (
-                    <ElectionsList onCreateElection={() => setShowCreateElection(true)} />
+                    <ElectionsList 
+                        onCreateElection={() => setShowCreateElection(true)}
+                        organizationId={organization.id}
+                    />
                 )}
 
                 {activeTab === 'candidates' && (
                    <div className="space-y-6">
                      <h2 className="text-2xl font-bold text-gray-900">Candidates</h2>
-                     <CandidatesList />
+                     <CandidatesList organizationId={organization.id} />
                    </div>
                 )}
 
-                {activeTab === 'admins' && (
+                {activeTab === 'admins' && user.role === 'organization' && (
                    <div className="space-y-6">
                      <h2 className="text-2xl font-bold text-gray-900">Organization Admins</h2>
-                     <OrganizationAdminsTab />
+                     <OrganizationAdminsTab organizationId={organization.id} />
                    </div>
                 )}
 
                 {activeTab === 'notifications' && (
                    <div className="space-y-6">
                      <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
-                     <NotificationList />
+                     <NotificationList organizationId={organization.id} />
                    </div>
                 )}
-
-
 
                 {showCreateElection && <CreateElectionModal />}
                 
@@ -642,4 +657,3 @@ let OrganizationDashboard = () => {
 };
 
 export default OrganizationDashboard;
-
