@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime
 
@@ -24,6 +24,10 @@ class Voter(Base):
     otp_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     otp_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # New fields for API-based elections
+    eligible_candidates: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string of eligible candidate IDs
+    is_api_voter: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Foreign Keys
     election_id: Mapped[int] = mapped_column(Integer, ForeignKey("elections.id", ondelete="CASCADE"), primary_key=True)

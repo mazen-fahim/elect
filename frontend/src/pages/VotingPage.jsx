@@ -227,9 +227,7 @@ const VotingPage = () => {
                                                 Symbol: {candidate.symbol_name}
                                             </p>
                                         )}
-                                        <div className="text-xs text-gray-400">
-                                            Current votes: {candidate.current_vote_count}
-                                        </div>
+                                        {/* Vote counts are intentionally hidden during voting to prevent bias */}
                                     </div>
                                 </div>
                             </div>

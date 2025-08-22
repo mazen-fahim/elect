@@ -68,6 +68,17 @@ let Navbar = () => {
                                 </Link>
                             </>
                         )}
+                        
+                        {/* Dummy Service link for testing - Admin only */}
+                        {user?.role === 'admin' && (
+                            <Link
+                                to="/dummy-service"
+                                className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive('/dummy-service')}`}
+                            >
+                                <Users className="h-4 w-4" />
+                                <span>Dummy Service</span>
+                            </Link>
+                        )}
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -157,7 +168,7 @@ let Navbar = () => {
                     }}
                     onUpdated={(updatedOrg) => {
                         // TODO: Update user context with new organization data
-                        console.log('Organization updated:', updatedOrg);
+                        // Organization updated successfully
                     }}
                 />
             )}

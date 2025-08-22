@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield, X } from 'lucide-react';
 import CandidatesList from "../components/CandidatesList";
 import ElectionsList from "../components/ElectionsList";
 import NotificationList from "../components/NotificationList";
@@ -21,6 +21,7 @@ let OrganizationDashboard = () => {
     
     // Modal state
     let [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+    let [apiSetupModal, setApiSetupModal] = useState({ isOpen: false, election: null });
 
     // Fetch dashboard stats from API
     const { data: dashboardStats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useOrganizationDashboardStats();
@@ -40,6 +41,15 @@ let OrganizationDashboard = () => {
 
     let closeModal = () => {
         setModalConfig({ isOpen: false, title: '', message: '', type: 'info' });
+    };
+
+    // Helper function to show API setup modal
+    let showApiSetupModal = (election) => {
+        setApiSetupModal({ isOpen: true, election });
+    };
+
+    let closeApiSetupModal = () => {
+        setApiSetupModal({ isOpen: false, election: null });
     };
 
     // Show loading while checking authentication
@@ -170,14 +180,63 @@ let OrganizationDashboard = () => {
                 setShowCreateElection(false);
                 resetForm();
                 
+                // Show success modal with election details for API setup
+                showApiSetupModal(newElection);
+                
                 // Refresh stats
                 refetchStats();
-                
-                showModal('Success', 'Election created successfully!', 'success');
             } catch (error) {
                 console.error('Error creating election:', error);
                 
                 let errorMessage = 'Failed to create election. Please try again.';
+                if (error.message && error.message !== 'Server error. Please try again later.') {
+                    errorMessage = error.message;
+                } else if (error.response && error.response.detail) {
+                    errorMessage = error.response.detail;
+                }
+                
+                showModal('Error', errorMessage, 'error');
+            } finally {
+                setIsCreatingElection(false);
+            }
+        };
+
+        let handleCsvElectionCreation = async () => {
+            try {
+                if (!formData.candidatesFile || !formData.votersFile) {
+                    showModal('Missing Files', 'Please select both candidates and voters CSV files.', 'warning');
+                    return;
+                }
+
+                const formDataObj = new FormData();
+                formDataObj.append('title', formData.title);
+                formDataObj.append('types', formData.type);
+                formDataObj.append('starts_at', new Date(formData.startDate).toISOString());
+                formDataObj.append('ends_at', new Date(formData.endDate).toISOString());
+                formDataObj.append('num_of_votes_per_voter', formData.numVotesPerVoter);
+                formDataObj.append('potential_number_of_voters', formData.potentialVoters);
+                formDataObj.append('candidates_file', formData.candidatesFile);
+                formDataObj.append('voters_file', formData.votersFile);
+
+                // Call CSV upload endpoint
+                const { electionApi } = await import('../services/api');
+                const newElection = await electionApi.createWithCsv(formDataObj);
+                
+                // Add to local state
+                addElection(newElection);
+                setShowCreateElection(false);
+                resetForm();
+                
+                // Show success modal for CSV election
+                showModal('Success', `Election "${newElection.title}" created successfully with ${newElection.number_of_candidates || 0} candidates and ${newElection.potential_number_of_voters || 0} voters.`, 'success');
+                
+            } catch (error) {
+                console.error('Error creating election with CSV:', error);
+                console.error('Full error object:', error);
+                console.error('Error response:', error.response);
+                console.error('Error message:', error.message);
+                
+                let errorMessage = 'Failed to create election. Please check your CSV files and try again.';
                 if (error.message && error.message !== 'Server error. Please try again later.') {
                     errorMessage = error.message;
                 } else if (error.response && error.response.detail) {
@@ -652,6 +711,121 @@ let OrganizationDashboard = () => {
                         <p className="text-sm text-gray-600">{modalConfig.message}</p>
                     </div>
                 </Modal>
+
+                {/* API Setup Modal */}
+                {apiSetupModal.isOpen && apiSetupModal.election && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                            {/* Header */}
+                            <div className="sticky top-0 bg-white border-b px-6 py-4 flex items-center justify-between rounded-t-xl">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-green-600">🎉 Election Created Successfully!</h2>
+                                    <p className="text-sm text-gray-600">Set up your API endpoint with these details</p>
+                                </div>
+                                <button
+                                    onClick={closeApiSetupModal}
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-6">
+                                {/* Election Details */}
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                    <h3 className="font-medium text-green-900 mb-3">Election Information</h3>
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <span className="text-green-700 font-medium">Election ID:</span>
+                                            <span className="ml-2 text-green-600 font-mono bg-green-100 px-2 py-1 rounded">
+                                                {apiSetupModal.election.id}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="text-green-700 font-medium">Title:</span>
+                                            <span className="ml-2 text-green-600">{apiSetupModal.election.title}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-green-700 font-medium">Method:</span>
+                                            <span className="ml-2 text-green-600">{apiSetupModal.election.method}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-green-700 font-medium">Type:</span>
+                                            <span className="ml-2 text-green-600">{apiSetupModal.election.types}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* API Setup Instructions */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <h3 className="font-medium text-blue-900 mb-3">🔧 API Setup Instructions</h3>
+                                    <div className="space-y-3 text-sm text-blue-800">
+                                        <p>Your API endpoint will receive POST requests with this structure:</p>
+                                        
+                                        <div className="bg-white border border-blue-300 rounded p-3 font-mono text-xs">
+                                            <div className="text-blue-600 mb-2">Request Body:</div>
+                                            <pre className="text-blue-800">
+{`{
+  "voter_national_id": "string",
+  "election_id": ${apiSetupModal.election.id},
+  "election_title": "${apiSetupModal.election.title}"
+}`}
+                                            </pre>
+                                        </div>
+
+                                        <p>Your API should respond with:</p>
+                                        
+                                        <div className="bg-white border border-blue-300 rounded p-3 font-mono text-xs">
+                                            <div className="text-blue-600 mb-2">Response Body:</div>
+                                            <pre className="text-blue-800">
+{`{
+  "is_eligible": true,
+  "phone_number": "+1234567890",
+  "eligible_candidates": [
+    {
+      "hashed_national_id": "abc123...",
+      "name": "Candidate Name",
+      "country": "United_States",
+      "birth_date": "1990-01-01T00:00:00Z"
+    }
+  ]
+}`}
+                                            </pre>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Important Notes */}
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                    <h3 className="font-medium text-yellow-900 mb-2">⚠️ Important Notes</h3>
+                                    <ul className="text-sm text-yellow-800 space-y-1">
+                                        <li>• Store the <strong>Election ID: {apiSetupModal.election.id}</strong> in your system</li>
+                                        <li>• Your API must respond within 30 seconds</li>
+                                        <li>• Return <code>is_eligible: false</code> for ineligible voters</li>
+                                        <li>• <code>phone_number</code> is required for eligible voters</li>
+                                        <li>• <code>eligible_candidates</code> should contain all candidate details</li>
+                                    </ul>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex space-x-4 pt-4 border-t">
+                                    <button
+                                        onClick={closeApiSetupModal}
+                                        className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors duration-200"
+                                    >
+                                        Got it, I'll set up my API
+                                    </button>
+                                    <button
+                                        onClick={closeApiSetupModal}
+                                        className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
