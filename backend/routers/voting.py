@@ -32,15 +32,15 @@ async def get_election_candidates(election_id: int, db: db_dependency):
     if now < election.starts_at or now > election.ends_at:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Election is not currently running")
     
-    # Get candidates participating in this election
+    # Get candidates participating in this election (without vote counts for privacy)
     candidates_result = await db.execute(
-        select(Candidate, CandidateParticipation.vote_count)
+        select(Candidate)
         .join(CandidateParticipation, CandidateParticipation.candidate_hashed_national_id == Candidate.hashed_national_id)
         .where(CandidateParticipation.election_id == election_id)
         .order_by(Candidate.name)
     )
     
-    candidates = candidates_result.all()
+    candidates = candidates_result.scalars().all()
     
     return {
         "election_info": {
@@ -55,10 +55,9 @@ async def get_election_candidates(election_id: int, db: db_dependency):
                 party=candidate.party,
                 symbol_name=candidate.symbol_name,
                 symbol_icon_url=candidate.symbol_icon_url,
-                photo_url=candidate.photo_url,
-                current_vote_count=vote_count or 0
+                photo_url=candidate.photo_url
             )
-            for candidate, vote_count in candidates
+            for candidate in candidates
         ]
     }
 

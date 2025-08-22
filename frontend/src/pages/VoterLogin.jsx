@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { voterApi } from '../services/api';
+import { voterApi, dummyServiceApi } from '../services/api';
 
 let VoterLogin = () => {
     let { electionId } = useParams();
@@ -18,12 +18,66 @@ let VoterLogin = () => {
         setSubmitting(true);
         setError('');
         setInfo('');
+        
+        console.log('=== STARTING OTP REQUEST FLOW ===');
+        console.log('National ID:', nationalId);
+        console.log('Election ID:', electionId);
+        console.log('About to call dummy service API...');
+        
         try {
-            // Only send national ID, phone number will be retrieved from database
-            await voterApi.requestOtp({ electionId, nationalId });
+            // Step 1: Call dummy service API directly to check voter eligibility
+            console.log('Step 1: Calling dummy service API for voter verification...');
+            console.log('API endpoint: /api/dummy-service/verify-voter/public');
+            console.log('Request payload:', {
+                voter_national_id: nationalId,
+                election_id: parseInt(electionId),
+                election_title: "Test Election"
+            });
+            
+            // Make direct fetch call to dummy service to ensure it shows in network tab
+            const dummyServiceUrl = 'http://localhost/api/proxy/dummy-service/verify-voter/public';
+            const dummyServiceResponse = await fetch(dummyServiceUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    voter_national_id: nationalId,
+                    election_id: parseInt(electionId),
+                    election_title: "Test Election"
+                })
+            });
+            
+            if (!dummyServiceResponse.ok) {
+                throw new Error(`Dummy service error: ${dummyServiceResponse.status}`);
+            }
+            
+            const dummyServiceData = await dummyServiceResponse.json();
+            console.log('Step 1 COMPLETED: Dummy service response:', dummyServiceData);
+            
+            if (!dummyServiceData.is_eligible) {
+                throw new Error(dummyServiceData.error_message || 'Voter not eligible for this election');
+            }
+            
+            console.log('Step 2: Voter verified by dummy service, requesting OTP from backend...');
+            
+            // Step 2: Send verification result to backend for OTP generation
+            const otpResponse = await voterApi.requestOtp({ 
+                electionId, 
+                nationalId,
+                phoneNumber: dummyServiceData.phone_number // Pass phone number from dummy service
+            });
+            
+            console.log('Step 2 COMPLETED: OTP request successful:', otpResponse);
             setInfo('OTP sent. Please check your phone.');
             setStep(2);
         } catch (err) {
+            console.error('ERROR in OTP request flow:', err);
+            console.error('Error details:', {
+                message: err?.message,
+                response: err?.response,
+                stack: err?.stack
+            });
             setError(err?.message || 'Failed to request OTP');
         } finally {
             setSubmitting(false);
@@ -77,6 +131,7 @@ let VoterLogin = () => {
                                 Enter your national ID to receive an OTP on your registered phone number
                             </p>
                         </div>
+                        
                         {error && (
                             <div className="text-sm text-red-600">{error}</div>
                         )}

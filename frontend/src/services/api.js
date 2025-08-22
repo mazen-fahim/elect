@@ -240,10 +240,11 @@ const electionApi = {
   },
 };
 const voterApi = {
-  requestOtp: async ({ electionId, nationalId }) => {
+  requestOtp: async ({ electionId, nationalId, phoneNumber }) => {
     const params = new URLSearchParams();
     params.append('election_id', electionId);
     if (nationalId) params.append('national_id', nationalId);
+    if (phoneNumber) params.append('phone_number', phoneNumber);
     return apiRequest(`/voters/login/request-otp?${params.toString()}`, { method: 'POST' });
   },
   verifyOtp: async ({ electionId, code, nationalId }) => {
@@ -461,6 +462,62 @@ const systemAdminApi = {
   },
 };
 
+// Dummy Service endpoints for testing API-based elections
+const dummyServiceApi = {
+  listCandidates: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString ? `/dummy-service/candidates?${queryString}` : '/dummy-service/candidates';
+    return apiRequest(endpoint);
+  },
+
+  createCandidate: async (candidateData) => {
+    return apiRequest('/dummy-service/candidates', {
+      method: 'POST',
+      body: JSON.stringify(candidateData),
+    });
+  },
+
+  deleteCandidate: async (candidateId) => {
+    return apiRequest(`/dummy-service/candidates/${candidateId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  listVoters: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString ? `/dummy-service/voters?${queryString}` : '/dummy-service/voters';
+    return apiRequest(endpoint);
+  },
+
+  createVoter: async (voterData) => {
+    return apiRequest('/dummy-service/voters', {
+      method: 'POST',
+      body: JSON.stringify(voterData),
+    });
+  },
+
+  deleteVoter: async (voterId) => {
+    return apiRequest(`/dummy-service/voters/${voterId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  verifyVoter: async (verificationData) => {
+    return apiRequest('/proxy/dummy-service/verify-voter/public', {
+      method: 'POST',
+      body: JSON.stringify(verificationData),
+    });
+  },
+};
+
 // Default export for easier importing
 const api = {
   get: (endpoint) => apiRequest(endpoint),
@@ -484,8 +541,9 @@ const api = {
   systemAdmin: systemAdminApi,
   public: publicApi, // Add publicApi to the default export
   voter: voterApi,
+  dummyService: dummyServiceApi,
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi, votingApi, resultsApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi, votingApi, resultsApi, dummyServiceApi };
 
