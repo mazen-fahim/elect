@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.future import select
 
@@ -12,6 +12,7 @@ from models.organization_admin import OrganizationAdmin
 from models.user import UserRole
 from services.auth import AuthService
 from services.notification import NotificationService
+from services.email import EmailService
 from models.notification import NotificationType
 
 
@@ -63,13 +64,20 @@ async def list_org_admins(db: db_dependency, current_org_user: organization_depe
     for a in admins:
         ures = await db.execute(select(User).where(User.id == a.user_id))
         u = ures.scalar_one()
-        admin_users.append(OrganizationAdminRead(user_id=u.id, email=u.email, first_name=u.first_name, last_name=u.last_name, created_at=a.created_at))
+        admin_users.append(
+            OrganizationAdminRead(
+                user_id=u.id, email=u.email, first_name=u.first_name, last_name=u.last_name, created_at=a.created_at
+            )
+        )
     return admin_users
 
 
 @router.post("/", response_model=OrganizationAdminRead, status_code=status.HTTP_201_CREATED)
 async def create_org_admin(
-    payload: OrganizationAdminCreate, db: db_dependency, current_org_user: organization_dependency
+    payload: OrganizationAdminCreate,
+    db: db_dependency,
+    current_org_user: organization_dependency,
+    background_tasks: BackgroundTasks,
 ):
     # Only boss can add admins
     if current_org_user.role != UserRole.organization:
@@ -98,7 +106,8 @@ async def create_org_admin(
         role=UserRole.organization_admin,
         created_at=datetime.now(timezone.utc),
         last_access_at=datetime.now(timezone.utc),
-        is_active=True,
+        # Require email verification before login
+        is_active=False,
     )
     db.add(new_user)
     await db.flush()
@@ -109,22 +118,45 @@ async def create_org_admin(
         created_at=datetime.now(timezone.utc),
     )
     db.add(org_admin)
-    
+
     # Store the values before commit to avoid expired object issues
     user_id = new_user.id
     user_email = new_user.email
     user_first_name = new_user.first_name
     user_last_name = new_user.last_name
     admin_created_at = org_admin.created_at
-    
+
     await db.commit()
-    
+
+    # Send verification email (24h expiry per settings) without extra DB IO
+    try:
+        from models.verification_token import VerificationToken, TokenType
+        from sqlalchemy.future import select
+
+        email_service = EmailService(db)
+        token_res = await db.execute(
+            select(VerificationToken).where(
+                (VerificationToken.user_id == user_id) & (VerificationToken.type == TokenType.EMAIL_VERIFICATION)
+            )
+        )
+        vtoken = token_res.scalars().first()
+        if vtoken:
+            await email_service.send_verification_email_with_existing_token(
+                user_email, vtoken.token, vtoken.expires_at, background_tasks
+            )
+            print(f"Queued verification email to {user_email}")
+        else:
+            print(f"Warning: no verification token found for user {user_id}")
+    except Exception as e:
+        # Non-fatal: org can resend later if needed
+        print(f"Failed to send verification email to org admin {user_email}: {e}")
+
     return OrganizationAdminRead(
-        user_id=user_id, 
-        email=user_email, 
-        first_name=user_first_name, 
-        last_name=user_last_name, 
-        created_at=admin_created_at
+        user_id=user_id,
+        email=user_email,
+        first_name=user_first_name,
+        last_name=user_last_name,
+        created_at=admin_created_at,
     )
 
 
@@ -152,19 +184,19 @@ async def delete_org_admin(user_id: int, db: db_dependency, current_org_user: or
     try:
         # Delete the organization admin record first
         await db.delete(admin)
-        
+
         # Delete the user record
         await db.delete(user)
-        
+
         await db.commit()
     except Exception as e:
         await db.rollback()
         print(f"Error deleting organization admin: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="Failed to delete organization admin. Please try again."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete organization admin. Please try again.",
         )
-    
+
     return
 
 
@@ -241,10 +273,7 @@ async def update_self(
             pass
 
     return OrganizationAdminSelfUpdateResponse(
-        user_id=user_id, 
-        email=user_email, 
-        first_name=user_first_name, 
-        last_name=user_last_name
+        user_id=user_id, email=user_email, first_name=user_first_name, last_name=user_last_name
     )
 
 
@@ -302,11 +331,9 @@ async def update_org_admin(
     await db.commit()
 
     return OrganizationAdminSelfUpdateResponse(
-        user_id=user_id, 
-        email=user_email, 
-        first_name=user_first_name, 
-        last_name=user_last_name
+        user_id=user_id, email=user_email, first_name=user_first_name, last_name=user_last_name
     )
+
 
 class OrgAdminOverview(BaseModel):
     organization_name: str
@@ -322,9 +349,7 @@ async def get_org_admin_overview(db: db_dependency, current_user: organization_d
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only organization admins can access this")
 
     # Get mapping
-    mapping_res = await db.execute(
-        select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
-    )
+    mapping_res = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id))
     mapping = mapping_res.scalar_one_or_none()
     if not mapping:
         raise HTTPException(status_code=404, detail="Organization mapping not found")

@@ -25,7 +25,6 @@ from routers import (
 )
 from routers.voting import router as voting_router
 from routers.results import router as results_router
-from core.scheduler import start_election_status_scheduler, stop_election_status_scheduler
 
 
 @asynccontextmanager
@@ -33,18 +32,14 @@ async def lifespan(app: FastAPI):
     redis_connection = redis.from_url("redis://redis", encoding="utf-8", decode_responses=True)
     await FastAPILimiter.init(redis_connection)
     print("Application startup...")
-    
-    # Start the election status scheduler
-    start_election_status_scheduler()
-    print("Election status scheduler started...")
-    
+
+    # Scheduler disabled (apscheduler not installed)
+
     try:
         yield
     finally:
-        # Stop the election status scheduler
-        stop_election_status_scheduler()
-        print("Election status scheduler stopped...")
-        
+        # Scheduler disabled
+
         await redis_connection.close()
         print("Application shutdown.")
 
