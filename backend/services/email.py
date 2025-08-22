@@ -34,9 +34,18 @@ class EmailService:
         """Send email verification with token"""
         token_value, expires_at = await self._generate_verification_token(user.id)
         verification_link = f"{settings.FRONTEND_VERIFICATION_URL}?token={token_value}"
-        # refresh the user object to ensure it has the latest email
-        await self.db.refresh(user)
+        # Use the email as provided; no refresh needed post-commit
         await self._send_email(user.email, verification_link, expires_at, background_tasks)
+
+    async def send_verification_email_with_existing_token(
+        self, email: str, token_value: str, expires_at: datetime, background_tasks: BackgroundTasks
+    ) -> None:
+        """Send verification email when a token has already been persisted.
+
+        This method does not touch the database to avoid async session/greenlet issues.
+        """
+        verification_link = f"{settings.FRONTEND_VERIFICATION_URL}?token={token_value}"
+        await self._send_email(email, verification_link, expires_at, background_tasks)
 
     async def send_password_reset_email(
         self, email: str, reset_url: str, expires_at: datetime, background_tasks: BackgroundTasks
