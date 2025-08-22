@@ -240,10 +240,11 @@ const electionApi = {
   },
 };
 const voterApi = {
-  requestOtp: async ({ electionId, nationalId }) => {
+  requestOtp: async ({ electionId, nationalId, phoneNumber }) => {
     const params = new URLSearchParams();
     params.append('election_id', electionId);
     if (nationalId) params.append('national_id', nationalId);
+    if (phoneNumber) params.append('phone_number', phoneNumber);
     return apiRequest(`/voters/login/request-otp?${params.toString()}`, { method: 'POST' });
   },
   verifyOtp: async ({ electionId, code, nationalId }) => {
@@ -510,7 +511,7 @@ const dummyServiceApi = {
   },
 
   verifyVoter: async (verificationData) => {
-    return apiRequest('/dummy-service/verify-voter', {
+    return apiRequest('/proxy/dummy-service/verify-voter/public', {
       method: 'POST',
       body: JSON.stringify(verificationData),
     });

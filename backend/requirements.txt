@@ -50,3 +50,4 @@ numpy
 pandas
 scikit-learn
 aiohttp>=3.8.0
+httpx>=0.24.0

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.base import Base
@@ -19,7 +19,7 @@ class Candidate(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     district: Mapped[str | None] = mapped_column(String(100), nullable=True)
     governorate: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    country: Mapped[Country] = mapped_column(String(100), nullable=False)
+    country: Mapped[Country] = mapped_column(Enum(Country), nullable=False)
     party: Mapped[str | None] = mapped_column(String(100), nullable=True)
     symbol_icon_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     symbol_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
