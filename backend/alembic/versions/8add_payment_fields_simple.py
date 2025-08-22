@@ -1,6 +1,6 @@
 """Add payment fields to users and organizations
 
-Revision ID: 7add_payment_fields
+Revision ID: 8add_payment_fields_simple
 Revises: 03fb93df8836_add_api_election_support_and_dummy_service
 Create Date: 2025-08-22
 """
@@ -9,7 +9,7 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = '7add_payment_fields'
+revision = '8add_payment_fields_simple'
 down_revision = '03fb93df8836_add_api_election_support_and_dummy_service'
 branch_labels = None
 depends_on = None
