@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Integer, String, func, Numeric
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.base import Base
@@ -29,6 +29,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     last_access_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    wallet: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, server_default="0")
+    stripe_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Relationships
     organization: Mapped["Organization"] = relationship("Organization", back_populates="user", uselist=False)

@@ -48,8 +48,8 @@ const CreateCandidateModal = ({ open, onClose, elections, onCreated }) => {
     }
   };
 
-  const availableElections = elections.filter(e => !form.election_ids.includes(e.id.toString()));
-  const selectedElections = elections.filter(e => form.election_ids.includes(e.id.toString()));
+  const availableElections = elections.filter(e => e.method === 'csv' && !form.election_ids.includes(e.id.toString()));
+  const selectedElections = elections.filter(e => e.method === 'csv' && form.election_ids.includes(e.id.toString()));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -204,6 +204,15 @@ const CreateCandidateModal = ({ open, onClose, elections, onCreated }) => {
           <div className="bg-blue-50 rounded-lg p-4">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Election Participation</h3>
             <p className="text-sm text-gray-600 mb-4">Select the elections this candidate will participate in (at least one required)</p>
+            
+            {/* Info about API elections */}
+            {elections.filter(e => e.method === 'api').length > 0 && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  <strong>Note:</strong> API-based elections ({elections.filter(e => e.method === 'api').length} found) are not shown here because their candidates are managed through external API endpoints, not manual creation.
+                </p>
+              </div>
+            )}
             
             {/* Selected Elections */}
             <div className="mb-4">
@@ -440,9 +449,15 @@ const CandidatesList = () => {
             <button 
               className="flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium hover:from-blue-700 hover:to-blue-800 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all transform hover:scale-105 shadow-lg" 
               onClick={()=>setShowCreate(true)}
+              disabled={elections.filter(e => e.method === 'csv').length === 0}
             >
               <Plus className="h-5 w-5"/> Create Candidate
             </button>
+            {elections.filter(e => e.method === 'csv').length === 0 && (
+              <div className="text-sm text-gray-500 italic">
+                No CSV elections available for manual candidate creation
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -470,10 +485,23 @@ const CandidatesList = () => {
           <p className="text-gray-500 mb-6">
             {search || electionId ? 'Try adjusting your search or filter criteria.' : 'Get started by creating your first candidate.'}
           </p>
+          
+          {/* Info about election types */}
+          {elections.length > 0 && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg max-w-md mx-auto">
+              <p className="text-sm text-gray-600">
+                <strong>Election Types:</strong><br/>
+                • <span className="text-blue-600">CSV Elections:</span> {elections.filter(e => e.method === 'csv').length} - Candidates can be manually created<br/>
+                • <span className="text-green-600">API Elections:</span> {elections.filter(e => e.method === 'api').length} - Candidates come from external APIs
+              </p>
+            </div>
+          )}
+          
           {!search && !electionId && (
             <button 
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={()=>setShowCreate(true)}
+              disabled={elections.filter(e => e.method === 'csv').length === 0}
             >
               <Plus className="h-5 w-5"/> Create First Candidate
             </button>

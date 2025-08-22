@@ -76,7 +76,7 @@ class CandidateCreateForElection(BaseModel):
     symbol_icon_url: Optional[str] = None
     symbol_name: Optional[str] = None
     photo_url: Optional[str] = None
-    birth_date: datetime
+    birth_date: Optional[datetime] = None  # Now optional
     description: Optional[str] = None
 
 

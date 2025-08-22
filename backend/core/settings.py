@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     TWILIO_AUTH_TOKEN: str
     TWILIO_PHONE_NUMBER: str
 
+    # Stripe and URLs (optional but used by payment router)
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+    APP_HOST: str = "http://localhost"
+    SERVER_DOMAIN: str = "http://localhost"
+
     class Config:
         extra = "ignore"  # Ignore extra env vars
 
