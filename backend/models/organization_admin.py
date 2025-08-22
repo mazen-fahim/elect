@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.base import Base
@@ -18,6 +18,9 @@ class OrganizationAdmin(Base):
     )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Email verification status for the organization admin account
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Relationships
     user = relationship("User", foreign_keys=[user_id])
