@@ -40,6 +40,8 @@ class PublicElection(BaseModel):
     total_vote_count: int
     number_of_candidates: int
     potential_number_of_voters: int
+    method: Optional[str] = None  # Add method field
+    api_endpoint: Optional[str] = None  # Add api_endpoint field
     organization_name: str
     organization_country: str
     status: ElectionStatus
@@ -90,6 +92,8 @@ async def get_public_elections(
         Election.total_vote_count,
         Election.number_of_candidates,
         Election.potential_number_of_voters,
+        Election.method,  # Add method field
+        Election.api_endpoint,  # Add api_endpoint field
         Organization.name.label("organization_name"),
         Organization.country.label("organization_country"),
     ).join(Organization, Election.organization_id == Organization.user_id)
@@ -161,6 +165,8 @@ async def get_public_elections(
                 total_vote_count=election_data.total_vote_count,
                 number_of_candidates=election_data.number_of_candidates,
                 potential_number_of_voters=election_data.potential_number_of_voters,
+                method=election_data.method,
+                api_endpoint=election_data.api_endpoint,
                 organization_name=election_data.organization_name,
                 organization_country=(
                     election_data.organization_country.value

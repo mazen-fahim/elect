@@ -74,15 +74,19 @@ async def get_organization(user: user_dependency, db: db_dependency):
     if user.role == UserRole.organization:
         return user
 
-    # Map organization_admin to owning organization user_id
-    result = await db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id))
-    mapping = result.scalar_one_or_none()
-    if not mapping:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization mapping not found for admin")
-
-    # Create a lightweight context preserving role/email but with id set to the owning organization user_id
-    return SimpleNamespace(id=mapping.organization_user_id, role=user.role, email=getattr(user, "email", None))
-
+    # For organization_admin: get the organization they manage
+    from models.organization_admin import OrganizationAdmin
+    admin_result = await db.execute(
+        select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id)
+    )
+    admin = admin_result.scalar_one_or_none()
+    
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin not found")
+    
+    # Return the organization context (admin user with organization_id set to the managed org)
+    user.organization_id = admin.organization_user_id
+    return user
 
 
 organization_dependency = Annotated[User, Depends(get_organization)]
