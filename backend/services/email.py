@@ -99,6 +99,23 @@ class EmailService:
 
         user.is_active = True
 
+        # If this is an organization admin account, mark the org-admin mapping as verified
+        try:
+            from models.user import UserRole
+            from models.organization_admin import OrganizationAdmin
+
+            if user.role == UserRole.organization:
+                # nothing to do for organization owner here
+                pass
+            elif user.role == UserRole.organization_admin:
+                result = await self.db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id))
+                org_admin = result.scalar_one_or_none()
+                if org_admin:
+                    org_admin.is_verified = True
+        except Exception as _:
+            # Do not block email verification if this mapping update fails
+            pass
+
         await self.db.delete(verification)
         await self.db.commit()
 
