@@ -10,6 +10,7 @@ from .voter import Voter
 from .voting_process import VotingProcess
 from .dummy_candidate import DummyCandidate
 from .dummy_voter import DummyVoter
+from .transaction import Transaction
 
 __all__ = [
     "Candidate",
@@ -24,4 +25,5 @@ __all__ = [
     "VotingProcess",
     "DummyCandidate",
     "DummyVoter",
+    "Transaction",
 ]
