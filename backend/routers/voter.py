@@ -20,6 +20,9 @@ from services.api_election_service import APIElectionService
 
 router = APIRouter(prefix="/voters", tags=["voters"])
 
+# Initialize logger
+logger = logging.getLogger(__name__)
+
 
 @router.post(
     "/",
@@ -182,7 +185,6 @@ def _resolve_voter_identifier(
 
 
 # Improved voter OTP request endpoint with security and consistency
-logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -204,7 +206,7 @@ async def request_voter_otp(
     national_id: str | None = None,
     email: str | None = None,
     id: str | None = None,
-
+    phone_number: str | None = None,  # Add phone_number parameter
 ):
     """
     Request OTP for voter login with improved security and consistency.
@@ -233,6 +235,8 @@ async def request_voter_otp(
         # Check if this is an API-based election
         if election.method == "api" and election.api_endpoint:
             # Handle API-based election
+            # Since the frontend now calls the dummy service directly, 
+            # we just need to create/update the voter record and generate OTP
             api_service = APIElectionService(db)
             
             # For API elections, we need the national ID (not hashed) to call the org's API
@@ -242,20 +246,35 @@ async def request_voter_otp(
                     detail="For API-based elections, please provide the national ID (not hashed)"
                 )
             
-            # Verify voter via organization's API
-            api_response = await api_service.verify_voter_via_api(election, national_id)
-            
-            if not api_response.is_eligible:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=api_response.error_message or "You are not eligible to vote in this election"
-                )
-            
-            # Create or update voter record from API response
+            # The frontend has already verified the voter with the dummy service,
+            # so we just need to create/update the voter record
             try:
+                # Use the phone number provided by the frontend (from dummy service)
+                if not phone_number:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Organization API did not provide phone number"
+                    )
+                
+                # Create a minimal API response for voter creation
+                # The actual verification was done by the frontend
+                from schemas.api_election import VoterVerificationResponse, CandidateInfo
+                
+                # Create a minimal response - the frontend already verified eligibility
+                api_response = VoterVerificationResponse(
+                    is_eligible=True,
+                    phone_number=phone_number,  # Use the phone number from frontend
+                    eligible_candidates=[]  # Will be populated from dummy service
+                )
+                
                 voter = await api_service.create_voter_from_api_response(
                     election_id, national_id, api_response
                 )
+                if not voter:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to create voter record from API response"
+                    )
                 phone_number = voter.phone_number
             except HTTPException:
                 raise
@@ -282,6 +301,11 @@ async def request_voter_otp(
                 )
             else:
                 # Voter exists, use stored phone number
+                if not voter.phone_number:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Voter does not have a phone number registered"
+                    )
                 phone_number = voter.phone_number
                 
                 # Rate limiting: 3 minutes between OTP requests
@@ -290,6 +314,20 @@ async def request_voter_otp(
                         status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Please wait before requesting a new OTP"
                     )
                 voter.is_verified = False  # Reset verification status on new OTP request
+
+        # Ensure phone_number is defined
+        if not phone_number:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Phone number not available for OTP delivery"
+            )
+
+        # Ensure voter object is defined
+        if not voter:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Voter object not available"
+            )
 
         # Generate 6-digit OTP and set expiry
         code = f"{random.randint(100000, 999999)}"

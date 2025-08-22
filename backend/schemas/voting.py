@@ -11,7 +11,7 @@ class CandidateVoteInfo(BaseModel):
     symbol_name: str | None = None
     symbol_icon_url: str | None = None
     photo_url: str | None = None
-    current_vote_count: int = 0
+    # Note: current_vote_count is intentionally excluded to prevent vote count visibility during voting
     
     class Config:
         from_attributes = True

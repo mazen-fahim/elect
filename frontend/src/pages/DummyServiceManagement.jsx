@@ -8,19 +8,6 @@ import { useApp } from '../context/AppContext';
 const DummyServiceManagement = () => {
     const { user } = useApp();
     
-    // Check access control - only admins can access this page
-    if (!user || user.role !== 'admin') {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="text-center">
-                    <Shield className="h-16 w-16 text-red-500 mx-auto mb-4" />
-                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
-                    <p className="text-gray-600">This page is restricted to administrators only.</p>
-                </div>
-            </div>
-        );
-    }
-
     const [activeTab, setActiveTab] = useState('candidates');
     const [candidates, setCandidates] = useState([]);
     const [voters, setVoters] = useState([]);
@@ -62,12 +49,6 @@ const DummyServiceManagement = () => {
         election_id: ''  // New field for election selection
     });
     
-    useEffect(() => {
-        fetchCandidates();
-        fetchVoters();
-        fetchElections();  // New function call
-    }, []);
-
     const fetchCandidates = async () => {
         try {
             const response = await dummyServiceApi.listCandidates();
@@ -94,6 +75,25 @@ const DummyServiceManagement = () => {
             console.error('Error fetching elections:', error);
         }
     };
+
+    useEffect(() => {
+        fetchCandidates();
+        fetchVoters();
+        fetchElections();  // New function call
+    }, []);
+
+    // Check access control - only admins can access this page
+    if (!user || user.role !== 'admin') {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <Shield className="h-16 w-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+                    <p className="text-gray-600">This page is restricted to administrators only.</p>
+                </div>
+            </div>
+        );
+    }
 
     const handleCreateCandidate = async (e) => {
         e.preventDefault();
@@ -601,8 +601,12 @@ const DummyServiceManagement = () => {
                                             value={voterForm.phone_number}
                                             onChange={(e) => setVoterForm({ ...voterForm, phone_number: e.target.value })}
                                             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            placeholder="e.g., 1060885465 (will auto-add +20)"
                                             required
                                         />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Enter the number without country code. The system will automatically detect and add the appropriate country code.
+                                        </p>
                                     </div>
                                 </div>
 
@@ -633,7 +637,7 @@ const DummyServiceManagement = () => {
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Eligible Candidates
+                                        Eligible Candidates (Optional)
                                     </label>
                                     <select
                                         multiple
@@ -657,6 +661,8 @@ const DummyServiceManagement = () => {
                                     <p className="text-xs text-gray-500 mt-1">
                                         Hold Ctrl/Cmd to select multiple candidates. Only shows candidates from the selected election.
                                         {!voterForm.election_id && ' Please select an election first.'}
+                                        <br />
+                                        <span className="text-blue-600 font-medium">Leave empty to allow voting for ALL candidates in this election.</span>
                                     </p>
                                 </div>
 
