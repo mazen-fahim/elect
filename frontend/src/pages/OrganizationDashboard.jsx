@@ -253,23 +253,63 @@ let OrganizationDashboard = () => {
                         const candidatesContent = await formData.candidatesFile.text();
                         const votersContent = await formData.votersFile.text();
                         
+                        // Validate that files are not empty
+                        if (!candidatesContent || candidatesContent.trim().length === 0) {
+                            throw new Error('Candidates CSV file is empty');
+                        }
+                        if (!votersContent || votersContent.trim().length === 0) {
+                            throw new Error('Voters CSV file is empty');
+                        }
+                        
+                        // Validate that files have at least a header row and one data row
+                        const candidatesLines = candidatesContent.split('\n').filter(line => line.trim() !== '');
+                        const votersLines = votersContent.split('\n').filter(line => line.trim() !== '');
+                        
+                        if (candidatesLines.length < 2) {
+                            throw new Error('Candidates CSV must have at least a header row and one data row');
+                        }
+                        if (votersLines.length < 2) {
+                            throw new Error('Voters CSV must have at least a header row and one data row');
+                        }
+                        
+                        console.log('OrganizationDashboard: CSV file content read:', {
+                            candidatesFile: {
+                                name: formData.candidatesFile.name,
+                                contentLength: candidatesContent.length,
+                                firstLine: candidatesContent.split('\n')[0],
+                                totalLines: candidatesLines.length
+                            },
+                            votersFile: {
+                                name: formData.votersFile.name,
+                                contentLength: votersContent.length,
+                                firstLine: votersContent.split('\n')[0],
+                                totalLines: votersLines.length
+                            }
+                        });
+                        
+                        // Create new File objects with the content to avoid file pointer issues
+                        const candidatesFile = new File([candidatesContent], formData.candidatesFile.name, { type: 'text/csv' });
+                        const votersFile = new File([votersContent], formData.votersFile.name, { type: 'text/csv' });
+                        
                         pendingElection.candidatesFile = {
-                            name: formData.candidatesFile.name,
+                            name: candidatesFile.name,
                             content: candidatesContent
                         };
                         pendingElection.votersFile = {
-                            name: formData.votersFile.name,
+                            name: votersFile.name,
                             content: votersContent
                         };
                         
                         console.log('OrganizationDashboard: CSV file content stored for post-payment recreation');
                     } catch (fileError) {
                         console.error('Error reading CSV files:', fileError);
-                        showModal('Error', 'Failed to read CSV files. Please try again.', 'error');
+                        showModal('Error', `Failed to read CSV files: ${fileError.message}`, 'error');
                         setIsCreatingElection(false);
                         return;
                     }
                 }
+                
+                console.log('OrganizationDashboard: Storing pending election data:', pendingElection);
                 
                 // Store in localStorage for post-payment retrieval
                 localStorage.setItem('pendingElectionData', JSON.stringify(pendingElection));

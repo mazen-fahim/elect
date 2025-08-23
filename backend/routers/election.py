@@ -889,6 +889,10 @@ async def create_election_with_csv(
     import pandas as pd
     import io
 
+    print(f"DEBUG: create-with-csv called with title={title}, types={types}")
+    print(f"DEBUG: candidates_file={candidates_file.filename}, size={candidates_file.size if hasattr(candidates_file, 'size') else 'unknown'}")
+    print(f"DEBUG: voters_file={voters_file.filename}, size={voters_file.size if hasattr(voters_file, 'size') else 'unknown'}")
+
     # Parse dates
     try:
         starts_at_dt = datetime.fromisoformat(starts_at.replace("Z", "+00:00"))
@@ -908,6 +912,8 @@ async def create_election_with_csv(
     # For organization admins, use the organization they manage; for organization owners, use their own ID
     organization_id = getattr(current_user, 'organization_id', current_user.id)
 
+    print(f"DEBUG: Creating election for organization_id={organization_id}")
+
     # Create the election
     new_election = Election(
         title=title,
@@ -925,15 +931,27 @@ async def create_election_with_csv(
     db.add(new_election)
     await db.flush()
 
+    print(f"DEBUG: Election created with ID {new_election.id}")
+
     # Process CSV files
     try:
+        print("DEBUG: Starting CSV processing...")
+        
         # Process CSV files using CSV handler (which handles hashing)
+        print("DEBUG: Processing candidates CSV...")
         candidates_data = await CSVHandler.process_candidates_csv(candidates_file)
+        print(f"DEBUG: Candidates CSV processed, got {len(candidates_data)} candidates")
+        
+        print("DEBUG: Processing voters CSV...")
         voters_data = await CSVHandler.process_voters_csv(voters_file)
+        print(f"DEBUG: Voters CSV processed, got {len(voters_data)} voters")
 
         # Create candidates and voters from processed data
+        print("DEBUG: Creating candidates and voters...")
         candidates_count = await _create_candidates_from_processed_data(db, new_election.id, organization_id, candidates_data)
         voters_count = await _create_voters_from_processed_data(db, new_election.id, voters_data)
+        
+        print(f"DEBUG: Created {candidates_count} candidates and {voters_count} voters")
 
         # Update election with actual counts
         new_election.number_of_candidates = candidates_count
@@ -950,6 +968,8 @@ async def create_election_with_csv(
         await db.commit()
         print(f"Database session after commit: {type(db)}, is_active: {getattr(db, 'is_active', 'unknown')}")
         await db.refresh(new_election)
+
+        print("DEBUG: Election committed successfully")
 
         # Create notification for election creation after commit
         print("Creating notification after commit...")
@@ -1000,9 +1020,14 @@ async def create_election_with_csv(
             "organization_id": new_election.organization_id
         }
         
+        print(f"DEBUG: Returning election data: {election_data}")
         return election_data
 
     except Exception as e:
+        print(f"DEBUG: Error in CSV processing: {str(e)}")
+        print(f"DEBUG: Error type: {type(e).__name__}")
+        import traceback
+        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
         await db.rollback()
         raise HTTPException(status_code=400, detail=f"Error processing CSV files: {str(e)}")
 
@@ -1106,10 +1131,15 @@ async def _create_candidates_from_processed_data(db, election_id, organization_i
     """
     from models.candidate_participation import CandidateParticipation
 
+    print(f"DEBUG: _create_candidates_from_processed_data called with {len(candidates_data)} candidates")
+    print(f"DEBUG: election_id={election_id}, organization_id={organization_id}")
+
     participations_created = 0
 
     for idx, candidate_info in enumerate(candidates_data):
         try:
+            print(f"DEBUG: Processing candidate {idx + 1}: {candidate_info.get('name', 'Unknown')}")
+            
             hashed_id = candidate_info["hashed_national_id"]
 
             # Check if candidate exists
@@ -1117,6 +1147,7 @@ async def _create_candidates_from_processed_data(db, election_id, organization_i
             candidate = existing.scalar_one_or_none()
 
             if not candidate:
+                print(f"DEBUG: Creating new candidate: {candidate_info.get('name', 'Unknown')}")
                 candidate = Candidate(
                     hashed_national_id=hashed_id,
                     name=candidate_info["name"],
@@ -1130,6 +1161,9 @@ async def _create_candidates_from_processed_data(db, election_id, organization_i
                     organization_id=organization_id,
                 )
                 db.add(candidate)
+                print(f"DEBUG: New candidate added to session")
+            else:
+                print(f"DEBUG: Using existing candidate: {candidate.name}")
 
             # Create participation if not exists
             existing_p = await db.execute(
@@ -1139,6 +1173,7 @@ async def _create_candidates_from_processed_data(db, election_id, organization_i
                 )
             )
             if existing_p.scalar_one_or_none() is None:
+                print(f"DEBUG: Creating participation for candidate: {candidate.name}")
                 db.add(
                     CandidateParticipation(
                         candidate_hashed_national_id=candidate.hashed_national_id,
@@ -1146,19 +1181,29 @@ async def _create_candidates_from_processed_data(db, election_id, organization_i
                     )
                 )
                 participations_created += 1
+                print(f"DEBUG: Participation created, total: {participations_created}")
+            else:
+                print(f"DEBUG: Participation already exists for candidate: {candidate.name}")
 
         except Exception as e:
+            print(f"DEBUG: Error processing candidate {idx + 1}: {str(e)}")
             raise ValueError(f"Error processing candidate row {idx + 1}: {str(e)}")
 
+    print(f"DEBUG: _create_candidates_from_processed_data completed, created {participations_created} participations")
     return participations_created
 
 
 async def _create_voters_from_processed_data(db, election_id, voters_data):
     """Create voters from processed data"""
 
+    print(f"DEBUG: _create_voters_from_processed_data called with {len(voters_data)} voters")
+    print(f"DEBUG: election_id={election_id}")
+
     voters_count = 0
     for idx, voter_info in enumerate(voters_data):
         try:
+            print(f"DEBUG: Processing voter {idx + 1}")
+            
             voter_hashed_id = voter_info["voter_hashed_national_id"]
             governorate_value = voter_info.get("governorate")
 
@@ -1169,6 +1214,7 @@ async def _create_voters_from_processed_data(db, election_id, voters_data):
                 )
             )
             if existing.scalar_one_or_none() is None:
+                print(f"DEBUG: Creating new voter: {voter_hashed_id[:8]}...")
                 voter = Voter(
                     voter_hashed_national_id=voter_hashed_id,
                     phone_number=voter_info["phone_number"],
@@ -1177,8 +1223,13 @@ async def _create_voters_from_processed_data(db, election_id, voters_data):
                 )
                 db.add(voter)
                 voters_count += 1
+                print(f"DEBUG: New voter added, total: {voters_count}")
+            else:
+                print(f"DEBUG: Voter already exists: {voter_hashed_id[:8]}...")
 
         except Exception as e:
+            print(f"DEBUG: Error processing voter {idx + 1}: {str(e)}")
             raise ValueError(f"Error processing voter row {idx + 1}: {str(e)}")
 
+    print(f"DEBUG: _create_voters_from_processed_data completed, created {voters_count} voters")
     return voters_count
