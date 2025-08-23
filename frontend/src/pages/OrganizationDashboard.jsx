@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Vote, Settings, Bell, Loader2, Shield, X, Brain } from 'lucide-react';
 import CandidatesList from "../components/CandidatesList";
 import ElectionsList from "../components/ElectionsList";
 import NotificationList from "../components/NotificationList";
 import Modal from "../components/Modal";
 import OrganizationAdminsTab from "../components/OrganizationAdminsTab";
+import AIElectionAnalytics from "../components/AIElectionAnalytics";
 import { useOrganizationDashboardStats } from '../hooks/useOrganization';
 import { electionApi } from '../services/api';
 
@@ -799,6 +800,7 @@ let OrganizationDashboard = () => {
         { id: 'overview', label: 'Overview', icon: Vote },
         { id: 'elections', label: 'Elections', icon: Vote },
         { id: 'candidates', label: 'Candidates', icon: Users },
+        { id: 'ai_analytics', label: 'AI Analytics', icon: Brain },
         ...(user.role === 'organization' ? [{ id: 'admins', label: 'Admins', icon: Shield }] : []),
         // إخفاء تبويب Notifications من Organization Admin فقط
         ...(user.role !== 'organization_admin' ? [{ id: 'notifications', label: 'Notifications', icon: Bell }] : []),
@@ -856,6 +858,13 @@ let OrganizationDashboard = () => {
                    <div className="space-y-6">
                      <h2 className="text-2xl font-bold text-gray-900">Candidates</h2>
                      <CandidatesList organizationId={organization.id} />
+                   </div>
+                )}
+
+                {activeTab === 'ai_analytics' && (
+                   <div className="space-y-6">
+                     <h2 className="text-2xl font-bold text-gray-900">AI Election Analytics</h2>
+                     <AIElectionAnalytics organizationId={organization.id} />
                    </div>
                 )}
 

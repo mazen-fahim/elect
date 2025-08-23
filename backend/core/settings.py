@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     APP_HOST: str = "http://localhost"
     SERVER_DOMAIN: str = "http://localhost"
 
+    # AI Configuration
+    OPENAI_API_KEY: str | None = None
+
     class Config:
         extra = "ignore"  # Ignore extra env vars
 

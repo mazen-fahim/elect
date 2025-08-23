@@ -43,8 +43,8 @@ cloudinary==1.44.1
 python-multipart==0.0.18
 
 # Data processing and analysis
-numpy==2.3.2
-pandas==2.2.3
+numpy>=1.26.0
+pandas>=2.2.0
 scikit-learn
 python-dateutil==2.9.0.post0
 
@@ -58,6 +58,9 @@ fastapi-limiter==0.1.6
 # External service integrations
 twilio==8.10.0
 stripe==10.10.0
+
+# AI/ML - Using Google Gemini API (free tier)
+# No additional packages needed - using httpx for API calls
 
 # Utilities
 click==8.2.1

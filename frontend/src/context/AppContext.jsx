@@ -160,6 +160,9 @@ export const AppProvider = ({ children }) => {
                         organizationName: userInfo.organization_name,
                     };
                     
+                    // Log user data for debugging
+                    console.log('User data loaded:', userData);
+                    
                     setUser(userData);
                 } catch (error) {
                     console.error('Failed to restore user session:', error);
