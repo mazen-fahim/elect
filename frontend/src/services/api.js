@@ -559,6 +559,19 @@ const paymentApi = {
   },
 };
 
+// AI Analytics endpoints
+export const aiAnalyticsApi = {
+  getElectionAnalytics: async (electionId) => {
+    const response = await apiRequest(`/ai-analytics/election/${electionId}`);
+    return response;
+  },
+  
+  getOrganizationAnalytics: async () => {
+    const response = await apiRequest('/ai-analytics/organization');
+    return response;
+  }
+};
+
 // Default export for easier importing
 const api = {
   get: (endpoint) => apiRequest(endpoint),
@@ -584,8 +597,23 @@ const api = {
   voter: voterApi,
   dummyService: dummyServiceApi,
   payment: paymentApi,
+  aiAnalytics: aiAnalyticsApi,
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi, votingApi, resultsApi, dummyServiceApi, paymentApi };
+export { 
+  ApiError, 
+  authApi, 
+  organizationApi, 
+  electionApi, 
+  candidateApi, 
+  notificationApi, 
+  systemAdminApi, 
+  publicApi, 
+  voterApi, 
+  votingApi, 
+  resultsApi, 
+  dummyServiceApi, 
+  paymentApi
+};
 

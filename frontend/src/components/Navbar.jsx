@@ -34,7 +34,7 @@ let Navbar = () => {
 
                     <div className="hidden md:flex items-center space-x-1">
                         {/* Show different navigation based on user role */}
-                        {user?.role === 'organization' ? (
+                        {(user?.role === 'organization' || user?.role === 'organization_admin') && user?.organizationId ? (
                             <Link
                                 to={`/org/${user.organizationId}/dashboard`}
                                 className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 ${isActive(`/org/${user.organizationId}/dashboard`)}`}
@@ -42,6 +42,10 @@ let Navbar = () => {
                                 <Shield className="h-4 w-4" />
                                 <span>Dashboard</span>
                             </Link>
+                        ) : (user?.role === 'organization' || user?.role === 'organization_admin') && !user?.organizationId ? (
+                            <span className="px-4 py-2 text-gray-500">
+                                No organization access
+                            </span>
                         ) : user?.role === 'admin' ? (
                             <Link
                                 to="/SystemAdmin"
@@ -91,13 +95,13 @@ let Navbar = () => {
                             <div className="flex items-center space-x-3">
                                 <span className="text-sm font-medium text-gray-700">
                                     Welcome,{' '}
-                                    {user.role === 'organization'
+                                    {user.role === 'organization' || user.role === 'organization_admin'
                                         ? user.organizationName || user.name || 'Organization'
                                         : user.role === 'admin'
                                         ? 'Admin'
                                         : user.name || 'User'}
                                 </span>
-                                {user.role === 'organization' && (
+                                {(user.role === 'organization' || user.role === 'organization_admin') && user?.organizationId && (
                                     <>
                                         <Link
                                             to={`/org/${user.organizationId}/dashboard`}
@@ -113,6 +117,11 @@ let Navbar = () => {
                                             <User className="h-5 w-5" />
                                         </button>
                                     </>
+                                )}
+                                {(user.role === 'organization' || user.role === 'organization_admin') && !user?.organizationId && (
+                                    <span className="px-4 py-2 text-gray-500 text-sm">
+                                        No organization access
+                                    </span>
                                 )}
                                 {user.role === 'admin' && (
                                     <Link

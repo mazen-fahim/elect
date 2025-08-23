@@ -172,19 +172,47 @@ async def delete_org_admin(user_id: int, db: db_dependency, current_org_user: or
         raise HTTPException(status_code=404, detail="User not found")
 
     try:
-        # Delete the organization admin record first
+        # Delete verification tokens first to avoid foreign key constraint violations
+        from models.verification_token import VerificationToken
+        verification_tokens_res = await db.execute(
+            select(VerificationToken).where(VerificationToken.user_id == user_id)
+        )
+        verification_tokens = verification_tokens_res.scalars().all()
+        for token in verification_tokens:
+            await db.delete(token)
+
+        # Check for any other potential foreign key references
+        # Note: Most models use CASCADE or reference organizations.user_id, not users.id directly
+        
+        # Delete the organization admin record
         await db.delete(admin)
 
         # Delete the user record
         await db.delete(user)
 
         await db.commit()
+        
+        # Log successful deletion
+        print(f"Successfully deleted organization admin with user_id: {user_id}")
+        
     except Exception as e:
         await db.rollback()
         print(f"Error deleting organization admin: {str(e)}")
+        # Log more details for debugging
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
+        
+        # Provide more specific error messages based on the error type
+        if "IntegrityError" in str(type(e)) or "NotNullViolationError" in str(e):
+            error_detail = "Database constraint violation. This may be due to related data that needs to be cleaned up first."
+        elif "ForeignKeyViolationError" in str(e):
+            error_detail = "Cannot delete due to existing references in other parts of the system."
+        else:
+            error_detail = "An unexpected error occurred while deleting the organization admin."
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete organization admin. Please try again.",
+            detail=f"Failed to delete organization admin: {error_detail}",
         )
 
     return

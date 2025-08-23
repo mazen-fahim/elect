@@ -28,6 +28,7 @@ from routers.proxy import router as proxy_router
 from routers.voting import router as voting_router
 from routers.results import router as results_router
 from routers.payment import router as payment_router
+from routers.ai_analytics import router as ai_analytics_router
 from core.scheduler import start_election_status_scheduler, stop_election_status_scheduler
 
 
@@ -79,5 +80,6 @@ api_router.include_router(approval)
 api_router.include_router(home)
 api_router.include_router(dummy_service_router)
 api_router.include_router(proxy_router)
+api_router.include_router(ai_analytics_router)
 
 app.include_router(api_router)
