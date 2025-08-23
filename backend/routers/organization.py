@@ -18,7 +18,20 @@ router = APIRouter(prefix="/organizations", tags=["Organizations"])
 @router.get("/")
 async def get_all_organizations(db: db_dependency):
     result = await db.execute(select(Organization))
-    return result.scalars().all()
+    organizations = result.scalars().all()
+    
+    # Extract all attributes to avoid MissingGreenlet errors
+    organizations_data = []
+    for org in organizations:
+        org_data = {
+            "user_id": org.user_id,
+            "name": org.name,
+            "country": org.country,
+            "status": org.status
+        }
+        organizations_data.append(org_data)
+    
+    return organizations_data
 
 
 @router.get("/dashboard-stats", response_model=OrganizationDashboardStats)

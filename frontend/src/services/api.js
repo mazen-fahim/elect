@@ -45,6 +45,8 @@ const apiRequest = async (endpoint, options = {}) => {
       } else if (response.status === 403) {
         if (errorData.detail === 'err.login.inactive' || errorData.error_message === 'User is inactive') {
           errorMessage = 'Your account is inactive. Please verify your email or contact support.';
+        } else if (errorData.detail && errorData.detail.includes('Please verify your email address')) {
+          errorMessage = errorData.detail;
         } else if (errorData.detail && errorData.detail.includes('pending approval')) {
           errorMessage = errorData.detail;
         } else if (errorData.detail && errorData.detail.includes('has been rejected')) {
@@ -518,6 +520,38 @@ const dummyServiceApi = {
   },
 };
 
+// Payment API endpoints
+const paymentApi = {
+  getConfig: async () => {
+    return apiRequest('/payment/config');
+  },
+
+  createCheckoutSession: async (payload) => {
+    return apiRequest('/payment/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getSessionStatus: async (sessionId) => {
+    return apiRequest(`/payment/session/${sessionId}`);
+  },
+
+  getWalletBalance: async () => {
+    return apiRequest('/payment/wallet/balance');
+  },
+
+  getTransactionHistory: async (params = {}) => {
+    const queryString = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '')
+      )
+    ).toString();
+    const endpoint = queryString ? `/payment/wallet/transactions?${queryString}` : '/payment/wallet/transactions';
+    return apiRequest(endpoint);
+  },
+};
+
 // Default export for easier importing
 const api = {
   get: (endpoint) => apiRequest(endpoint),
@@ -542,8 +576,9 @@ const api = {
   public: publicApi, // Add publicApi to the default export
   voter: voterApi,
   dummyService: dummyServiceApi,
+  payment: paymentApi,
 };
 
 export default api;
-export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi, votingApi, resultsApi, dummyServiceApi };
+export { ApiError, authApi, organizationApi, electionApi, candidateApi, notificationApi, systemAdminApi, publicApi, voterApi, votingApi, resultsApi, dummyServiceApi, paymentApi };
 

@@ -14,6 +14,7 @@ from models.user import UserRole
 from models.approval_request import ApprovalRequest, ApprovalTargetType, ApprovalAction, ApprovalStatus
 from core.shared import Country
 from models import Candidate
+from models.organization import Organization
 from schemas.candidate import CandidateRead, CandidateCreate, CandidateUpdate, CandidateCreateResponse
 from services.image import ImageService
 from services.notification import NotificationService
@@ -53,8 +54,8 @@ async def get_all_candidates(
     party: Optional[str] = None,
     country: Optional[Country] = None,
 ):
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     # Filter candidates by the current user's organization
     query = (
@@ -85,13 +86,49 @@ async def get_all_candidates(
     query = query.offset(skip).limit(limit)
 
     result = await db.execute(query)
-    return result.scalars().all()
+    candidates = result.scalars().all()
+    
+    # Extract all attributes to avoid MissingGreenlet errors
+    candidates_data = []
+    for candidate in candidates:
+        candidate_data = {
+            "hashed_national_id": candidate.hashed_national_id,
+            "name": candidate.name,
+            "country": candidate.country,
+            "birth_date": candidate.birth_date,
+            "organization_id": candidate.organization_id,
+            "party": candidate.party,
+            "symbol_name": candidate.symbol_name,
+            "description": candidate.description,
+            "district": candidate.district,
+            "governorate": candidate.governorate,
+            "symbol_icon_url": candidate.symbol_icon_url,
+            "photo_url": candidate.photo_url,
+            "created_at": candidate.created_at,
+            "participations": [
+                {
+                    "election_id": p.election_id,
+                    "vote_count": p.vote_count,
+                    "has_won": p.has_won,
+                "rank": p.rank
+                }
+                for p in candidate.participations
+            ] if candidate.participations else [],
+            "organization": {
+                "user_id": candidate.organization.user_id,
+                "name": candidate.organization.name,
+                "country": candidate.organization.country
+            } if candidate.organization else None
+        }
+        candidates_data.append(candidate_data)
+    
+    return candidates_data
 
 
 @router.get("/{hashed_national_id}", response_model=CandidateRead)
 async def get_candidate_by_id(hashed_national_id: str, db: db_dependency, current_user: organization_dependency):
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     query = (
         select(Candidate)
@@ -109,15 +146,47 @@ async def get_candidate_by_id(hashed_national_id: str, db: db_dependency, curren
     if not candidate:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found")
 
-    return candidate
+    # Extract all attributes to avoid MissingGreenlet errors
+    # Store values before any potential session expiration
+    candidate_data = {
+        "hashed_national_id": candidate.hashed_national_id,
+        "name": candidate.name,
+        "country": candidate.country,
+        "birth_date": candidate.birth_date,
+        "organization_id": candidate.organization_id,
+        "party": candidate.party,
+        "symbol_name": candidate.symbol_name,
+        "description": candidate.description,
+        "district": candidate.district,
+        "governorate": candidate.governorate,
+        "symbol_icon_url": candidate.symbol_icon_url,
+        "photo_url": candidate.photo_url,
+        "created_at": candidate.created_at,
+        "participations": [
+            {
+                "election_id": p.election_id,
+                "vote_count": p.vote_count,
+                "has_won": p.has_won,
+                "rank": p.rank
+            }
+            for p in candidate.participations
+        ] if candidate.participations else [],
+        "organization": {
+            "user_id": candidate.organization.user_id,
+            "name": candidate.organization.name,
+            "country": candidate.organization.country
+        } if candidate.organization else None
+    }
+
+    return candidate_data
 
 
 @router.get("/election/{election_id}", response_model=list[CandidateRead])
 async def get_candidates_by_election(election_id: int, db: db_dependency, current_user: organization_dependency):
     from models.candidate_participation import CandidateParticipation
 
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     # Subquery to get candidate IDs participating in this election
     candidate_ids_subq = select(CandidateParticipation.candidate_hashed_national_id).where(
@@ -135,7 +204,42 @@ async def get_candidates_by_election(election_id: int, db: db_dependency, curren
 
     result = await db.execute(query)
     candidates = result.scalars().all()
-    return candidates
+    
+    # Extract all attributes to avoid MissingGreenlet errors
+    candidates_data = []
+    for candidate in candidates:
+        candidate_data = {
+            "hashed_national_id": candidate.hashed_national_id,
+            "name": candidate.name,
+            "country": candidate.country,
+            "birth_date": candidate.birth_date,
+            "organization_id": candidate.organization_id,
+            "party": candidate.party,
+            "symbol_name": candidate.symbol_name,
+            "description": candidate.description,
+            "district": candidate.district,
+            "governorate": candidate.governorate,
+            "symbol_icon_url": candidate.symbol_icon_url,
+            "photo_url": candidate.photo_url,
+            "created_at": candidate.created_at,
+            "participations": [
+                {
+                    "election_id": p.election_id,
+                    "vote_count": p.vote_count,
+                    "has_won": p.has_won,
+                "rank": p.rank
+                }
+                for p in candidate.participations
+            ] if candidate.participations else [],
+            "organization": {
+                "user_id": candidate.organization.user_id,
+                "name": candidate.organization.name,
+                "country": candidate.organization.country
+            } if candidate.organization else None
+        }
+        candidates_data.append(candidate_data)
+    
+    return candidates_data
 
 
 # API to upload candidate image
@@ -168,8 +272,8 @@ async def create_candidate(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="A candidate with this national ID already exists"
             )
 
-        # Store organization_id early to avoid expired attribute issues
-        org_id = organization_id or current_user.id
+        # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+        org_id = organization_id or getattr(current_user, 'organization_id', current_user.id)
 
         # If requester is organization_admin, stage the request without creating the entity
         if current_user.role == UserRole.organization_admin:
@@ -207,8 +311,8 @@ async def create_candidate(
         # Save the election symbol icon (optional)
         symbol_icon_url = await image_service.upload_image(symbol_icon)
 
-        # Store organization_id early to avoid expired attribute issues
-        org_id = organization_id or current_user.id
+        # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+        org_id = organization_id or getattr(current_user, 'organization_id', current_user.id)
 
         # Create a new Candidate
         new_candidate = Candidate(
@@ -266,7 +370,37 @@ async def create_candidate(
         try:
             await db.commit()
             await db.refresh(new_candidate)
-            return new_candidate
+            
+            # Load organization relationship to avoid MissingGreenlet errors
+            org_result = await db.execute(
+                select(Organization).where(Organization.user_id == new_candidate.organization_id)
+            )
+            organization = org_result.scalar_one_or_none()
+            
+            # Extract all attributes to avoid MissingGreenlet errors
+            candidate_data = {
+                "hashed_national_id": new_candidate.hashed_national_id,
+                "name": new_candidate.name,
+                "country": new_candidate.country,
+                "birth_date": new_candidate.birth_date,
+                "organization_id": new_candidate.organization_id,
+                "party": new_candidate.party,
+                "symbol_name": new_candidate.symbol_name,
+                "description": new_candidate.description,
+                "district": new_candidate.district,
+                "governorate": new_candidate.governorate,
+                "symbol_icon_url": new_candidate.symbol_icon_url,
+                "photo_url": new_candidate.photo_url,
+                "created_at": new_candidate.created_at,
+                "participations": [],
+                "organization": {
+                    "user_id": organization.user_id,
+                    "name": organization.name,
+                    "country": organization.country
+                } if organization else None
+            }
+            
+            return candidate_data
         except IntegrityError as e:
             await db.rollback()
             if "duplicate key value violates unique constraint" in str(e) or "already exists" in str(e):
@@ -296,8 +430,8 @@ async def update_candidate(
     db: db_dependency,
     current_user: organization_dependency,
 ):
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     # Only allow access to candidates from the current user's organization
     result = await db.execute(
@@ -338,6 +472,46 @@ async def update_candidate(
         else:
             setattr(candidate, field, value)
 
+    # Extract data before commit to avoid MissingGreenlet errors
+    participations_data = [
+        {
+            "election_id": p.election_id,
+            "vote_count": p.vote_count,
+            "has_won": p.has_won,
+            "rank": p.rank
+        }
+        for p in candidate.participations
+    ] if candidate.participations else []
+    
+    organization_data = {
+        "user_id": candidate.organization.user_id,
+        "name": candidate.organization.name,
+        "country": candidate.organization.country
+    } if candidate.organization else None
+
+    # Extract candidate data for notification and response before commit
+    candidate_id_for_notification = candidate.hashed_national_id
+    candidate_name_for_notification = candidate.name
+    
+    # Extract all candidate data for response before commit to avoid MissingGreenlet errors
+    candidate_response_data = {
+        "hashed_national_id": candidate.hashed_national_id,
+        "name": candidate.name,
+        "country": candidate.country,
+        "birth_date": candidate.birth_date,
+        "organization_id": candidate.organization_id,
+        "party": candidate.party,
+        "symbol_name": candidate.symbol_name,
+        "description": candidate.description,
+        "district": candidate.district,
+        "governorate": candidate.governorate,
+        "symbol_icon_url": candidate.symbol_icon_url,
+        "photo_url": candidate.photo_url,
+        "created_at": candidate.created_at,
+        "participations": participations_data,
+        "organization": organization_data
+    }
+
     await db.commit()
     await db.refresh(candidate)
 
@@ -345,13 +519,13 @@ async def update_candidate(
     if changes_made:
         notification_service = NotificationService(db)
         candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate.hashed_national_id, candidate_name=candidate.name, changes_made=changes_made
+            candidate_id=candidate_id_for_notification, candidate_name=candidate_name_for_notification, changes_made=changes_made
         )
         await notification_service.create_candidate_updated_notification(
             organization_id=organization_id, candidate_data=candidate_notification_data
         )
 
-    return candidate
+    return candidate_response_data
 
 
 @router.put("/{hashed_national_id}/with-files", response_model=CandidateRead)
@@ -371,8 +545,8 @@ async def update_candidate_with_files(
     symbol_icon: Annotated[UploadFile | None, File()] = None,
 ):
     """Update candidate with support for file uploads"""
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     # Only allow access to candidates from the current user's organization
     result = await db.execute(
@@ -445,6 +619,46 @@ async def update_candidate_with_files(
         candidate.birth_date = birth_date
         changes_made.append("birth_date")
 
+    # Extract data before commit to avoid MissingGreenlet errors
+    participations_data = [
+        {
+            "election_id": p.election_id,
+            "vote_count": p.vote_count,
+            "has_won": p.has_won,
+            "rank": p.rank
+        }
+        for p in candidate.participations
+    ] if candidate.participations else []
+    
+    organization_data = {
+        "user_id": candidate.organization.user_id,
+        "name": candidate.organization.name,
+        "country": candidate.organization.country
+    } if candidate.organization else None
+
+    # Extract candidate data for notification and response before commit
+    candidate_id_for_notification = candidate.hashed_national_id
+    candidate_name_for_notification = candidate.name
+    
+    # Extract all candidate data for response before commit to avoid MissingGreenlet errors
+    candidate_response_data = {
+        "hashed_national_id": candidate.hashed_national_id,
+        "name": candidate.name,
+        "country": candidate.country,
+        "birth_date": candidate.birth_date,
+        "organization_id": candidate.organization_id,
+        "party": candidate.party,
+        "symbol_name": candidate.symbol_name,
+        "description": candidate.description,
+        "district": candidate.district,
+        "governorate": candidate.governorate,
+        "symbol_icon_url": candidate.symbol_icon_url,
+        "photo_url": candidate.photo_url,
+        "created_at": candidate.created_at,
+        "participations": participations_data,
+        "organization": organization_data
+    }
+
     await db.commit()
     await db.refresh(candidate)
 
@@ -457,13 +671,13 @@ async def update_candidate_with_files(
 
         notification_service = NotificationService(db)
         candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate.hashed_national_id, candidate_name=candidate.name, changes_made=changes_made
+            candidate_id=candidate_id_for_notification, candidate_name=candidate_name_for_notification, changes_made=changes_made
         )
         await notification_service.create_candidate_updated_notification(
             organization_id=organization_id, candidate_data=candidate_notification_data
         )
 
-    return candidate
+    return candidate_response_data
 
 
 class ParticipationsUpdate(BaseModel):
@@ -480,8 +694,8 @@ async def set_candidate_participations(
     from models.candidate_participation import CandidateParticipation
     from models.election import Election
 
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     # Load candidate and current participations - only allow access to own organization's candidates
     result = await db.execute(
@@ -543,9 +757,46 @@ async def set_candidate_participations(
     for eid in to_add:
         db.add(CandidateParticipation(candidate_hashed_national_id=candidate.hashed_national_id, election_id=eid))
 
+    # Extract data before commit to avoid MissingGreenlet errors
+    participations_data = [
+        {
+            "election_id": p.election_id,
+            "vote_count": p.vote_count,
+            "has_won": p.has_won,
+            "rank": p.rank
+        }
+        for p in candidate.participations
+    ] if candidate.participations else []
+    
+    organization_data = {
+        "user_id": candidate.organization.user_id,
+        "name": candidate.organization.name,
+        "country": candidate.organization.country
+    } if candidate.organization else None
+
     await db.commit()
     await db.refresh(candidate)
-    return candidate
+    
+    # Return data using extracted values to avoid MissingGreenlet errors
+    candidate_data = {
+        "hashed_national_id": candidate.hashed_national_id,
+        "name": candidate.name,
+        "country": candidate.country,
+        "birth_date": candidate.birth_date,
+        "organization_id": candidate.organization_id,
+        "party": candidate.party,
+        "symbol_name": candidate.symbol_name,
+        "description": candidate.description,
+        "district": candidate.district,
+        "governorate": candidate.governorate,
+        "symbol_icon_url": candidate.symbol_icon_url,
+        "photo_url": candidate.photo_url,
+        "created_at": candidate.created_at,
+        "participations": participations_data,
+        "organization": organization_data
+    }
+
+    return candidate_data
 
 
 @router.delete("/{hashed_national_id}", status_code=204)
@@ -554,8 +805,8 @@ async def delete_candidate(
     db: db_dependency,
     current_user: organization_dependency,
 ):
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     # Only allow access to candidates from the current user's organization
     result = await db.execute(
@@ -579,6 +830,25 @@ async def delete_candidate(
         if election.starts_at <= now <= election.ends_at:
             raise HTTPException(status_code=400, detail="Cannot delete candidate while their election is running")
 
+    # Extract candidate data before deletion
+    candidate_id_for_notification = candidate.hashed_national_id
+    candidate_name_for_notification = candidate.name
+
+    # Delete candidate participations first to avoid foreign key constraint issues
+    from models.candidate_participation import CandidateParticipation
+    
+    # Delete all participations for this candidate
+    participations_result = await db.execute(
+        select(CandidateParticipation).where(
+            CandidateParticipation.candidate_hashed_national_id == hashed_national_id
+        )
+    )
+    participations = participations_result.scalars().all()
+    
+    for participation in participations:
+        await db.delete(participation)
+    
+    # Now delete the candidate
     await db.delete(candidate)
     await db.commit()
 
@@ -586,7 +856,7 @@ async def delete_candidate(
     try:
         notification_service = NotificationService(db)
         candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate.hashed_national_id, candidate_name=candidate.name
+            candidate_id=candidate_id_for_notification, candidate_name=candidate_name_for_notification
         )
         await notification_service.create_candidate_deleted_notification(
             organization_id=organization_id, candidate_data=candidate_notification_data
@@ -600,8 +870,8 @@ async def create_candidates_bulk(
     candidates_data: list[CandidateCreate], db: db_dependency, current_user: organization_dependency
 ):
     """Create multiple candidates at once"""
-    # Store organization_id early to avoid expired attribute issues
-    organization_id = current_user.id
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     created_candidates = []
 
@@ -639,4 +909,38 @@ async def create_candidates_bulk(
     for candidate in created_candidates:
         await db.refresh(candidate)
 
-    return created_candidates
+    # Extract all attributes to avoid MissingGreenlet errors
+    candidates_data = []
+    for candidate in created_candidates:
+        candidate_data = {
+            "hashed_national_id": candidate.hashed_national_id,
+            "name": candidate.name,
+            "country": candidate.country,
+            "birth_date": candidate.birth_date,
+            "organization_id": candidate.organization_id,
+            "party": candidate.party,
+            "symbol_name": candidate.symbol_name,
+            "description": candidate.description,
+            "district": candidate.district,
+            "governorate": candidate.governorate,
+            "symbol_icon_url": candidate.symbol_icon_url,
+            "photo_url": candidate.photo_url,
+            "created_at": candidate.created_at,
+            "participations": [
+                {
+                    "election_id": p.election_id,
+                    "vote_count": p.vote_count,
+                    "has_won": p.has_won,
+                "rank": p.rank
+                }
+                for p in candidate.participations
+            ] if candidate.participations else [],
+            "organization": {
+                "user_id": candidate.organization.user_id,
+                "name": candidate.organization.name,
+                "country": candidate.organization.country
+            } if candidate.organization else None
+        }
+        candidates_data.append(candidate_data)
+
+    return candidates_data

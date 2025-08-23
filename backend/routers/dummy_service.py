@@ -8,6 +8,7 @@ from sqlalchemy import and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.dependencies import db_dependency, admin_dependency
+from core.shared import hash_national_id
 from models.dummy_candidate import DummyCandidate
 from models.dummy_voter import DummyVoter
 from schemas.api_election import (
@@ -25,7 +26,8 @@ router = APIRouter(prefix="/dummy-service", tags=["dummy-service"])
 
 def _hash_identifier(value: str) -> str:
     """Hash a national ID to create a hashed identifier"""
-    return hashlib.sha256(value.strip().lower().encode("utf-8")).hexdigest()
+    # Use centralized hashing function to ensure consistency
+    return hash_national_id(value)
 
 
 def _format_phone_number(phone_number: str) -> str:

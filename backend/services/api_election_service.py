@@ -11,7 +11,7 @@ from models.voter import Voter
 from models.candidate import Candidate
 from models.candidate_participation import CandidateParticipation
 from schemas.api_election import VoterVerificationRequest, VoterVerificationResponse, CandidateInfo
-from core.shared import Country
+from core.shared import Country, hash_national_id
 
 
 class APIElectionService:
@@ -23,7 +23,8 @@ class APIElectionService:
     
     def _hash_identifier(self, value: str) -> str:
         """Hash a national ID to create a hashed identifier"""
-        return hashlib.sha256(value.strip().lower().encode("utf-8")).hexdigest()
+        # Use centralized hashing function to ensure consistency
+        return hash_national_id(value)
     
     async def verify_voter_via_api(
         self, 

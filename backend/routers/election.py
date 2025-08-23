@@ -58,10 +58,33 @@ async def _sync_election_candidate_count(election: Election, db: AsyncSession) -
 
 @router.get("/", response_model=list[ElectionOut])
 async def get_all_elections(db: db_dependency, current_user: organization_dependency):
-    # Only return elections from the current user's organization
-    result = await db.execute(select(Election).where(Election.organization_id == current_user.id))
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
+    result = await db.execute(select(Election).where(Election.organization_id == organization_id))
     elections = result.scalars().all()
-    return elections
+    
+    # Extract all attributes to avoid MissingGreenlet errors
+    elections_data = []
+    for election in elections:
+        election_data = {
+            "id": election.id,
+            "title": election.title,
+            "types": election.types,
+            "status": election.status,
+            "starts_at": election.starts_at,
+            "ends_at": election.ends_at,
+            "created_at": election.created_at,
+            "total_vote_count": election.total_vote_count,
+            "number_of_candidates": election.number_of_candidates,
+            "potential_number_of_voters": election.potential_number_of_voters,
+            "num_of_votes_per_voter": election.num_of_votes_per_voter,
+            "method": election.method,
+            "api_endpoint": election.api_endpoint,
+            "organization_id": election.organization_id
+        }
+        elections_data.append(election_data)
+    
+    return elections_data
 
 
 @router.get("/organization", response_model=List[ElectionListResponse])
@@ -79,7 +102,9 @@ async def get_organization_elections(
     """Get elections for the authenticated organization with search and filtering"""
 
     # Base query for organization's elections
-    query = select(Election).where(Election.organization_id == current_user.id)
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
+    query = select(Election).where(Election.organization_id == organization_id)
 
     # Apply search filter if provided
     if search:
@@ -137,12 +162,31 @@ async def get_organization_elections(
 async def get_specific_election(election_id: int, db: db_dependency, current_user: organization_dependency):
     # Only allow access to elections from the current user's organization
     result = await db.execute(
-        select(Election).where(Election.id == election_id).where(Election.organization_id == current_user.id)
+        select(Election).where(Election.id == election_id).where(Election.organization_id == getattr(current_user, 'organization_id', current_user.id))
     )
     election = result.scalar_one_or_none()
     if not election:
         raise HTTPException(status_code=404, detail="Election not found")
-    return election
+    
+    # Extract all attributes to avoid MissingGreenlet errors
+    election_data = {
+        "id": election.id,
+        "title": election.title,
+        "types": election.types,
+        "status": election.status,
+        "starts_at": election.starts_at,
+        "ends_at": election.ends_at,
+        "created_at": election.created_at,
+        "total_vote_count": election.total_vote_count,
+        "number_of_candidates": election.number_of_candidates,
+        "potential_number_of_voters": election.potential_number_of_voters,
+        "num_of_votes_per_voter": election.num_of_votes_per_voter,
+        "method": election.method,
+        "api_endpoint": election.api_endpoint,
+        "organization_id": election.organization_id
+    }
+    
+    return election_data
 
 
 async def _create_candidates_from_data(
@@ -215,7 +259,8 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="End date must be after start date")
 
         # Use the organization ID from the authenticated user
-        organization_id = current_user.id
+        # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+        organization_id = getattr(current_user, 'organization_id', current_user.id)
         print(f"Organization ID: {organization_id}, User role: {current_user.role}")
 
         # Strict pre-approval: if requester is organization_admin, stage request only
@@ -353,7 +398,26 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
             # Don't fail the election creation if notification creation fails
 
         print("Election creation completed successfully")
-        return new_election
+        
+        # Extract all attributes to avoid MissingGreenlet errors
+        election_data = {
+            "id": new_election.id,
+            "title": new_election.title,
+            "types": new_election.types,
+            "status": new_election.status,
+            "starts_at": new_election.starts_at,
+            "ends_at": new_election.ends_at,
+            "created_at": new_election.created_at,
+            "total_vote_count": new_election.total_vote_count,
+            "number_of_candidates": new_election.number_of_candidates,
+            "potential_number_of_voters": new_election.potential_number_of_voters,
+            "num_of_votes_per_voter": new_election.num_of_votes_per_voter,
+            "method": new_election.method,
+            "api_endpoint": new_election.api_endpoint,
+            "organization_id": new_election.organization_id
+        }
+        
+        return election_data
         
     except HTTPException:
         # Re-raise HTTP exceptions as-is
@@ -379,8 +443,10 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
 async def update_election(
     election_id: int, election_data: ElectionUpdate, db: db_dependency, current_user: organization_dependency
 ):
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
     result = await db.execute(
-        select(Election).where(Election.id == election_id, Election.organization_id == current_user.id)
+        select(Election).where(Election.id == election_id, Election.organization_id == organization_id)
     )
     election = result.scalar_one_or_none()
     if not election:
@@ -433,7 +499,25 @@ async def update_election(
     #         changes_made=changes_made
     #     )
 
-    return election
+    # Extract all attributes to avoid MissingGreenlet errors
+    election_data = {
+        "id": election.id,
+        "title": election.title,
+        "types": election.types,
+        "status": election.status,
+        "starts_at": election.starts_at,
+        "ends_at": election.ends_at,
+        "created_at": election.created_at,
+        "total_vote_count": election.total_vote_count,
+        "number_of_candidates": election.number_of_candidates,
+        "potential_number_of_voters": election.potential_number_of_voters,
+        "num_of_votes_per_voter": election.num_of_votes_per_voter,
+        "method": election.method,
+        "api_endpoint": election.api_endpoint,
+        "organization_id": election.organization_id
+    }
+    
+    return election_data
 
 
 @router.delete("/{election_id}", status_code=204)
@@ -442,43 +526,79 @@ async def delete_election(election_id: int, db: db_dependency, current_user: org
     Delete an election and all its associated records (candidates, voters, voting processes, notifications).
     Only allows deletion of upcoming elections.
     """
-    result = await db.execute(
-        select(Election).where(Election.id == election_id, Election.organization_id == current_user.id)
-    )
-    election = result.scalar_one_or_none()
-    if not election:
-        raise HTTPException(status_code=404, detail="Election not found")
-
-    # Only allow deleting upcoming elections
-    from datetime import datetime, timezone
-
-    now = datetime.now(timezone.utc)
-    if not (now < election.starts_at):
-        raise HTTPException(status_code=400, detail="Only upcoming elections can be deleted")
-
-    # Store election info for notification before deletion
-    election_title = election.title
-    election_id_for_notification = election.id
-
     try:
+        print(f"Starting deletion of election {election_id}")
+        
+        # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+        organization_id = getattr(current_user, 'organization_id', current_user.id)
+        print(f"Organization ID: {organization_id}, User role: {current_user.role}")
+        
+        result = await db.execute(
+            select(Election).where(Election.id == election_id, Election.organization_id == organization_id)
+        )
+        election = result.scalar_one_or_none()
+        if not election:
+            raise HTTPException(status_code=404, detail="Election not found")
+
+        print(f"Found election: {election.title}")
+
+        # Only allow deleting upcoming elections
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        if not (now < election.starts_at):
+            raise HTTPException(status_code=400, detail="Only upcoming elections can be deleted")
+
+        print(f"Election is upcoming, proceeding with deletion")
+
+        # Store election info for notification before deletion
+        election_title = election.title
+        election_id_for_notification = election.id
+
         # Manually delete all related records to avoid CASCADE issues
 
-        # 1. Delete candidate participations
+        print("Step 1: Deleting candidate participations and candidates")
+        # 1. Delete candidate participations and the candidates themselves
         from models.candidate_participation import CandidateParticipation
 
         participations_result = await db.execute(
             select(CandidateParticipation).where(CandidateParticipation.election_id == election_id)
         )
         participations = participations_result.scalars().all()
+        print(f"Found {len(participations)} candidate participations")
+        
+        # Get unique candidate IDs from participations
+        candidate_ids = list(set([p.candidate_hashed_national_id for p in participations]))
+        print(f"Unique candidate IDs: {candidate_ids}")
+        
+        # Delete candidate participations first
         for participation in participations:
             await db.delete(participation)
+        print("Deleted all candidate participations")
+        
+        # Delete the candidates that were participating in this election
+        if candidate_ids:
+            candidates_result = await db.execute(
+                select(Candidate).where(Candidate.hashed_national_id.in_(candidate_ids))
+            )
+            candidates = candidates_result.scalars().all()
+            print(f"Found {len(candidates)} candidates to delete")
+            for candidate in candidates:
+                await db.delete(candidate)
+            print("Deleted all candidates")
+        else:
+            print("No candidates to delete")
 
+        print("Step 2: Deleting voters")
         # 2. Delete voters
         voters_result = await db.execute(select(Voter).where(Voter.election_id == election_id))
         voters = voters_result.scalars().all()
+        print(f"Found {len(voters)} voters to delete")
         for voter in voters:
             await db.delete(voter)
+        print("Deleted all voters")
 
+        print("Step 3: Deleting voting processes")
         # 3. Delete voting processes
         from models.voting_process import VotingProcess
 
@@ -486,36 +606,51 @@ async def delete_election(election_id: int, db: db_dependency, current_user: org
             select(VotingProcess).where(VotingProcess.election_id == election_id)
         )
         voting_processes = voting_processes_result.scalars().all()
+        print(f"Found {len(voting_processes)} voting processes to delete")
         for voting_process in voting_processes:
             await db.delete(voting_process)
+        print("Deleted all voting processes")
 
+        print("Step 4: Deleting notifications")
         # 4. Delete notifications related to this election
         from models.notification import Notification
 
         notifications_result = await db.execute(select(Notification).where(Notification.election_id == election_id))
         notifications = notifications_result.scalars().all()
+        print(f"Found {len(notifications)} notifications to delete")
         for notification in notifications:
             await db.delete(notification)
+        print("Deleted all notifications")
 
+        print("Step 5: Deleting the election itself")
         # 6. Finally delete the election itself
         await db.delete(election)
+        print("Marked election for deletion")
 
         # Commit all deletions first
+        print("Committing all deletions...")
         await db.commit()
+        print("Successfully committed all deletions")
 
+        print("Step 6: Creating deletion notification")
         # 7. Create notification after successful deletion (in a separate transaction)
         try:
             notification_service = NotificationService(db)
             await notification_service.create_election_deleted_notification(
-                organization_id=current_user.id,
+                organization_id=getattr(current_user, 'organization_id', current_user.id),
                 election_title=election_title,
                 election_id=None,  # Set to None since election will be deleted
             )
+            print("Successfully created deletion notification")
         except Exception as notification_error:
             print(f"Warning: Failed to create deletion notification: {notification_error}")
             # Don't fail the deletion if notification creation fails
 
     except Exception as e:
+        print(f"ERROR during election deletion: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to delete election: {str(e)}")
 
@@ -536,9 +671,11 @@ async def replace_election_csv_data(
 ):
     """Replace election's CSV data (candidates and voters) with new files"""
 
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
     # Get the election
     result = await db.execute(
-        select(Election).where(Election.id == election_id, Election.organization_id == current_user.id)
+        select(Election).where(Election.id == election_id, Election.organization_id == organization_id)
     )
     election = result.scalar_one_or_none()
     if not election:
@@ -611,20 +748,13 @@ async def replace_election_csv_data(
         import pandas as pd
         import io
 
-        # Read candidates CSV
-        candidates_content = await candidates_file.read()
-        candidates_df = pd.read_csv(io.StringIO(candidates_content.decode("utf-8")))
+        # Process CSV files using CSV handler (which handles hashing)
+        candidates_data = await CSVHandler.process_candidates_csv(candidates_file)
+        voters_data = await CSVHandler.process_voters_csv(voters_file)
 
-        # Read voters CSV
-        voters_content = await voters_file.read()
-        voters_df = pd.read_csv(io.StringIO(voters_content.decode("utf-8")))
-
-        # Validate required columns based on election type
-        await _validate_csv_columns(candidates_df, voters_df, types)
-
-        # Create new candidates and voters
-        candidates_count = await _create_candidates_from_csv(db, election_id, current_user.id, candidates_df)
-        voters_count = await _create_voters_from_csv(db, election_id, voters_df)
+        # Create new candidates and voters from processed data
+        candidates_count = await _create_candidates_from_processed_data(db, election_id, organization_id, candidates_data)
+        voters_count = await _create_voters_from_processed_data(db, election_id, voters_data)
 
         # Sync election counts with actual data
         await _sync_election_candidate_count(election, db)
@@ -668,14 +798,17 @@ async def upload_candidates_csv(
     if not election:
         raise HTTPException(status_code=404, detail="Election not found")
 
-    if election.organization_id != current_user.id:
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
+    
+    if election.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this election")
 
     # Process CSV file
     candidates_data = await CSVHandler.process_candidates_csv(file)
 
     # Create candidates
-    await _create_candidates_from_data(candidates_data, election_id, current_user.id, db)
+    await _create_candidates_from_data(candidates_data, election_id, organization_id, db)
 
     # Sync candidate count with actual data
     await _sync_election_candidate_count(election, db)
@@ -695,7 +828,10 @@ async def upload_voters_csv(
     if not election:
         raise HTTPException(status_code=404, detail="Election not found")
 
-    if election.organization_id != current_user.id:
+    # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
+    
+    if election.organization_id != organization_id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this election")
 
     # Process CSV file
@@ -757,7 +893,8 @@ async def create_election_with_csv(
     if not voters_file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Voters file must be a CSV")
 
-    organization_id = current_user.id
+    # For organization admins, use the organization they manage; for organization owners, use their own ID
+    organization_id = getattr(current_user, 'organization_id', current_user.id)
 
     # Create the election
     new_election = Election(
@@ -778,20 +915,13 @@ async def create_election_with_csv(
 
     # Process CSV files
     try:
-        # Read candidates CSV
-        candidates_content = await candidates_file.read()
-        candidates_df = pd.read_csv(io.StringIO(candidates_content.decode("utf-8")))
+        # Process CSV files using CSV handler (which handles hashing)
+        candidates_data = await CSVHandler.process_candidates_csv(candidates_file)
+        voters_data = await CSVHandler.process_voters_csv(voters_file)
 
-        # Read voters CSV
-        voters_content = await voters_file.read()
-        voters_df = pd.read_csv(io.StringIO(voters_content.decode("utf-8")))
-
-        # Validate required columns based on election type
-        await _validate_csv_columns(candidates_df, voters_df, types)
-
-        # Create candidates and voters
-        candidates_count = await _create_candidates_from_csv(db, new_election.id, organization_id, candidates_df)
-        voters_count = await _create_voters_from_csv(db, new_election.id, voters_df)
+        # Create candidates and voters from processed data
+        candidates_count = await _create_candidates_from_processed_data(db, new_election.id, organization_id, candidates_data)
+        voters_count = await _create_voters_from_processed_data(db, new_election.id, voters_data)
 
         # Update election with actual counts
         new_election.number_of_candidates = candidates_count
@@ -840,7 +970,25 @@ async def create_election_with_csv(
             print(f"Notification error traceback: {traceback.format_exc()}")
             # Don't fail the election creation if notification creation fails
 
-        return new_election
+        # Extract all attributes to avoid MissingGreenlet errors
+        election_data = {
+            "id": new_election.id,
+            "title": new_election.title,
+            "types": new_election.types,
+            "status": new_election.status,
+            "starts_at": new_election.starts_at,
+            "ends_at": new_election.ends_at,
+            "created_at": new_election.created_at,
+            "total_vote_count": new_election.total_vote_count,
+            "number_of_candidates": new_election.number_of_candidates,
+            "potential_number_of_voters": new_election.potential_number_of_voters,
+            "num_of_votes_per_voter": new_election.num_of_votes_per_voter,
+            "method": new_election.method,
+            "api_endpoint": new_election.api_endpoint,
+            "organization_id": new_election.organization_id
+        }
+        
+        return election_data
 
     except Exception as e:
         await db.rollback()
@@ -851,14 +999,14 @@ async def _validate_csv_columns(candidates_df, voters_df, election_type):
     """Validate that CSV files have required columns based on election type"""
 
     # Required columns for candidates
-    required_candidate_cols = ["hashed_national_id", "name", "country", "birth_date"]
+    required_candidate_cols = ["national_id", "name", "country", "birth_date"]
     if election_type == "district_based":
         required_candidate_cols.append("district")
     elif election_type == "governorate_based":
         required_candidate_cols.append("governorate")
 
     # Required columns for voters
-    required_voter_cols = ["voter_hashed_national_id", "phone_number"]
+    required_voter_cols = ["national_id", "phone_number"]
     if election_type == "district_based":
         required_voter_cols.append("district")
     elif election_type == "governorate_based":
@@ -939,22 +1087,18 @@ async def _validate_type_change_compatibility(db, election, new_election_type):
             )
 
 
-async def _create_candidates_from_csv(db, election_id, organization_id, candidates_df):
-    """Create candidates from CSV data and link them to the election via participations.
+async def _create_candidates_from_processed_data(db, election_id, organization_id, candidates_data):
+    """Create candidates from processed data and link them to the election via participations.
 
     Returns the number of participations created for this election (used as election.number_of_candidates).
     """
-    from datetime import datetime
     from models.candidate_participation import CandidateParticipation
 
     participations_created = 0
 
-    for idx, row in candidates_df.iterrows():
+    for idx, candidate_info in enumerate(candidates_data):
         try:
-            # Parse birth_date
-            birth_date = datetime.fromisoformat(str(row["birth_date"]).replace("Z", "+00:00"))
-
-            hashed_id = str(row["hashed_national_id"])
+            hashed_id = candidate_info["hashed_national_id"]
 
             # Check if candidate exists
             existing = await db.execute(select(Candidate).where(Candidate.hashed_national_id == hashed_id))
@@ -963,14 +1107,14 @@ async def _create_candidates_from_csv(db, election_id, organization_id, candidat
             if not candidate:
                 candidate = Candidate(
                     hashed_national_id=hashed_id,
-                    name=str(row["name"]),
-                    district=str(row.get("district", "")) if pd.notna(row.get("district")) else None,
-                    governorate=str(row.get("governorate", "")) if pd.notna(row.get("governorate")) else None,
-                    country=str(row["country"]),
-                    party=str(row.get("party", "")) if pd.notna(row.get("party")) else None,
-                    symbol_name=str(row.get("symbol_name", "")) if pd.notna(row.get("symbol_name")) else None,
-                    birth_date=birth_date,
-                    description=str(row.get("description", "")) if pd.notna(row.get("description")) else None,
+                    name=candidate_info["name"],
+                    district=candidate_info.get("district"),
+                    governorate=candidate_info.get("governorate"),
+                    country=candidate_info["country"],
+                    party=candidate_info.get("party"),
+                    symbol_name=candidate_info.get("symbol_name"),
+                    birth_date=candidate_info["birth_date"],
+                    description=candidate_info.get("description"),
                     organization_id=organization_id,
                 )
                 db.add(candidate)
@@ -997,29 +1141,32 @@ async def _create_candidates_from_csv(db, election_id, organization_id, candidat
     return participations_created
 
 
-async def _create_voters_from_csv(db, election_id, voters_df):
-    """Create voters from CSV data"""
+async def _create_voters_from_processed_data(db, election_id, voters_data):
+    """Create voters from processed data"""
 
     voters_count = 0
-    for _, row in voters_df.iterrows():
+    for idx, voter_info in enumerate(voters_data):
         try:
-            # Handle both 'district' and 'governorate' columns - store in governerate field
-            location_value = None
-            if "district" in voters_df.columns and pd.notna(row.get("district")):
-                location_value = str(row["district"])
-            elif "governorate" in voters_df.columns and pd.notna(row.get("governorate")):
-                location_value = str(row["governorate"])
+            voter_hashed_id = voter_info["voter_hashed_national_id"]
+            governorate_value = voter_info.get("governorate")
 
-            voter = Voter(
-                voter_hashed_national_id=str(row["voter_hashed_national_id"]),
-                phone_number=str(row["phone_number"]),
-                governerate=location_value,
-                election_id=election_id,
+            # Check if voter exists
+            existing = await db.execute(
+                select(Voter).where(
+                    Voter.voter_hashed_national_id == voter_hashed_id, Voter.election_id == election_id
+                )
             )
-            db.add(voter)
-            voters_count += 1
+            if existing.scalar_one_or_none() is None:
+                voter = Voter(
+                    voter_hashed_national_id=voter_hashed_id,
+                    phone_number=voter_info["phone_number"],
+                    governerate=governorate_value,
+                    election_id=election_id,
+                )
+                db.add(voter)
+                voters_count += 1
 
         except Exception as e:
-            raise ValueError(f"Error processing voter row {voters_count + 1}: {str(e)}")
+            raise ValueError(f"Error processing voter row {idx + 1}: {str(e)}")
 
     return voters_count

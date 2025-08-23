@@ -12,65 +12,86 @@ let VoterLogin = () => {
     let [submitting, setSubmitting] = useState(false);
     let [error, setError] = useState('');
     let [info, setInfo] = useState('');
+    let [generatedOtp, setGeneratedOtp] = useState('');
 
     let handleRequestOtp = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError('');
         setInfo('');
+        setGeneratedOtp('');
         
         console.log('=== STARTING OTP REQUEST FLOW ===');
         console.log('National ID:', nationalId);
         console.log('Election ID:', electionId);
-        console.log('About to call dummy service API...');
         
         try {
-            // Step 1: Call dummy service API directly to check voter eligibility
-            console.log('Step 1: Calling dummy service API for voter verification...');
-            console.log('API endpoint: /api/dummy-service/verify-voter/public');
-            console.log('Request payload:', {
-                voter_national_id: nationalId,
-                election_id: parseInt(electionId),
-                election_title: "Test Election"
-            });
-            
-            // Make direct fetch call to dummy service to ensure it shows in network tab
-            const dummyServiceUrl = 'http://localhost/api/proxy/dummy-service/verify-voter/public';
-            const dummyServiceResponse = await fetch(dummyServiceUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    voter_national_id: nationalId,
-                    election_id: parseInt(electionId),
-                    election_title: "Test Election"
-                })
-            });
-            
-            if (!dummyServiceResponse.ok) {
-                throw new Error(`Dummy service error: ${dummyServiceResponse.status}`);
+            // First, check if this is an API-based election or CSV-based election
+            console.log('Step 1: Checking election type...');
+            const electionResponse = await fetch(`/api/home/elections/${electionId}`);
+            if (!electionResponse.ok) {
+                throw new Error('Failed to fetch election details');
             }
             
-            const dummyServiceData = await dummyServiceResponse.json();
-            console.log('Step 1 COMPLETED: Dummy service response:', dummyServiceData);
+            const election = await electionResponse.json();
+            console.log('Election details:', election);
             
-            if (!dummyServiceData.is_eligible) {
-                throw new Error(dummyServiceData.error_message || 'Voter not eligible for this election');
+            if (election.method === 'api' && election.api_endpoint) {
+                // API-based election: use dummy service first
+                console.log('Step 2: API-based election - checking voter eligibility with dummy service...');
+                
+                const dummyServiceUrl = 'http://localhost/api/proxy/dummy-service/verify-voter/public';
+                const dummyServiceResponse = await fetch(dummyServiceUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        voter_national_id: nationalId,
+                        election_id: parseInt(electionId),
+                        election_title: election.title
+                    })
+                });
+                
+                if (!dummyServiceResponse.ok) {
+                    throw new Error(`Dummy service error: ${dummyServiceResponse.status}`);
+                }
+                
+                const dummyServiceData = await dummyServiceResponse.json();
+                console.log('Step 2 COMPLETED: Dummy service response:', dummyServiceData);
+                
+                if (!dummyServiceData.is_eligible) {
+                    throw new Error(dummyServiceData.error_message || 'Voter not eligible for this election');
+                }
+                
+                console.log('Step 3: Voter verified by dummy service, requesting OTP from backend...');
+                
+                // Step 3: Send verification result to backend for OTP generation
+                const otpResponse = await voterApi.requestOtp({ 
+                    electionId, 
+                    nationalId,
+                    phoneNumber: dummyServiceData.phone_number // Pass phone number from dummy service
+                });
+                
+                console.log('Step 3 COMPLETED: OTP request successful:', otpResponse);
+                setInfo('OTP sent. Please check your phone.');
+                setGeneratedOtp(otpResponse.otp_code);
+                setStep(2);
+            } else {
+                // CSV-based election: directly request OTP from backend
+                console.log('Step 2: CSV-based election - directly requesting OTP from backend...');
+                
+                const otpResponse = await voterApi.requestOtp({ 
+                    electionId, 
+                    nationalId
+                    // No phoneNumber needed for CSV elections - backend will use stored phone
+                });
+                
+                console.log('Step 2 COMPLETED: OTP request successful:', otpResponse);
+                setInfo('OTP sent. Please check your phone.');
+                setGeneratedOtp(otpResponse.otp_code);
+                setStep(2);
             }
-            
-            console.log('Step 2: Voter verified by dummy service, requesting OTP from backend...');
-            
-            // Step 2: Send verification result to backend for OTP generation
-            const otpResponse = await voterApi.requestOtp({ 
-                electionId, 
-                nationalId,
-                phoneNumber: dummyServiceData.phone_number // Pass phone number from dummy service
-            });
-            
-            console.log('Step 2 COMPLETED: OTP request successful:', otpResponse);
-            setInfo('OTP sent. Please check your phone.');
-            setStep(2);
         } catch (err) {
             console.error('ERROR in OTP request flow:', err);
             console.error('Error details:', {
@@ -89,6 +110,7 @@ let VoterLogin = () => {
         setSubmitting(true);
         setError('');
         setInfo('');
+        setGeneratedOtp('');
         try {
             const response = await voterApi.verifyOtp({ electionId, code: otpCode, nationalId });
             
@@ -138,6 +160,25 @@ let VoterLogin = () => {
                         {info && (
                             <div className="text-sm text-green-600">{info}</div>
                         )}
+                        {/* Testing: Show OTP prominently */}
+                        {generatedOtp && (
+                            <div className="bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-3 rounded-lg">
+                                <div className="font-bold text-lg mb-2">🧪 TESTING MODE</div>
+                                <div className="text-2xl font-mono text-center bg-yellow-200 p-3 rounded border-2 border-yellow-500">
+                                    {generatedOtp}
+                                </div>
+                                <div className="text-sm mt-2 text-center mb-3">
+                                    ⚠️ This OTP is displayed for testing purposes only
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => navigator.clipboard.writeText(generatedOtp)}
+                                    className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded"
+                                >
+                                    📋 Copy OTP to Clipboard
+                                </button>
+                            </div>
+                        )}
                         <button
                             type="submit"
                             disabled={submitting}
@@ -164,6 +205,16 @@ let VoterLogin = () => {
                             <p className="text-xs text-gray-500 mt-1">
                                 Enter the 6-digit code sent to your phone
                             </p>
+                            {/* Testing: Auto-fill OTP button */}
+                            {generatedOtp && (
+                                <button
+                                    type="button"
+                                    onClick={() => setOtpCode(generatedOtp)}
+                                    className="w-full mt-2 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded text-sm"
+                                >
+                                    🔐 Auto-fill OTP for Testing
+                                </button>
+                            )}
                         </div>
                         {error && (
                             <div className="text-sm text-red-600">{error}</div>

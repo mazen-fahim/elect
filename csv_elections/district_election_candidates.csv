@@ -1,6 +1,5 @@
-hashed_national_id,name,district,country,party,symbol_name,birth_date,description
-hash_amr_sabry_dist_001,Amr Sabry,District 1 - Nasr City,Egypt,Urban Development Party,Skyline,1974-06-18T00:00:00Z,Urban planner and infrastructure development expert
-hash_eman_farid_dist_002,Eman Farid,District 1 - Nasr City,Egypt,Community First Alliance,House,1971-03-25T00:00:00Z,Social services coordinator and community advocate
-hash_khaled_mostafa_dist_003,Khaled Mostafa,District 2 - Heliopolis,Egypt,Business Growth Coalition,Graph,1979-11-12T00:00:00Z,Marketing executive and small business supporter
-hash_rania_ahmed_dist_004,Rania Ahmed,District 2 - Heliopolis,Egypt,Cultural Heritage Party,Pyramid,1967-08-07T00:00:00Z,Art historian and cultural preservation activist
-hash_mahmoud_hassan_dist_005,Mahmoud Hassan,District 3 - Maadi,Egypt,Environmental Protection Movement,Tree,1982-02-14T00:00:00Z,Environmental engineer and sustainability consultant
+national_id,name,district,country,party,symbol_name,birth_date,description
+90123456789012,Amr Sabry,District 1 - Nasr City,Egypt,Urban Development Party,Skyline,1974-06-18T00:00:00Z,Urban planner and infrastructure development expert
+01234567890123,Layla Ahmed,District 2 - Maadi,Egypt,Green Future Coalition,Tree,1979-12-05T00:00:00Z,Environmental scientist and sustainability advocate
+12345678901234,Omar Khalil,District 3 - Heliopolis,Egypt,Heritage Preservation Society,Monument,1965-08-14T00:00:00Z,Historian and cultural heritage expert
+23456789012345,Nadia Hassan,District 4 - Zamalek,Egypt,Arts and Culture Movement,Palette,1971-03-28T00:00:00Z,Artist and cultural development specialist

@@ -44,8 +44,11 @@ const OrganizationAdminsTab = () => {
       // Transform the API response to match our UI needs
       const transformedAdmins = response.map(admin => ({
         id: admin.user_id,
+        user_id: admin.user_id, // Keep user_id for API operations
         email: admin.email,
-        name: admin.email.split('@')[0], // Use email prefix as name for now
+        first_name: admin.first_name || admin.email.split('@')[0], // Use first_name if available, fallback to email prefix
+        last_name: admin.last_name || '', // Use last_name if available
+        name: admin.first_name && admin.last_name ? `${admin.first_name} ${admin.last_name}` : admin.email.split('@')[0], // Full name or email prefix
         role: 'organization_admin',
         created_at: admin.created_at,
         last_active: admin.created_at // Use created_at as last_active for now
@@ -75,8 +78,11 @@ const OrganizationAdminsTab = () => {
       // Add to local state
       const newAdmin = {
         id: response.user_id,
+        user_id: response.user_id, // Keep user_id for API operations
         email: response.email,
-        name: response.email.split('@')[0],
+        first_name: response.first_name || response.email.split('@')[0],
+        last_name: response.last_name || '',
+        name: response.first_name && response.last_name ? `${response.first_name} ${response.last_name}` : response.email.split('@')[0],
         role: 'organization_admin',
         created_at: response.created_at,
         last_active: response.created_at
