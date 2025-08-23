@@ -556,28 +556,7 @@ const AdminDashboard = () => {
     </div>
   );
 
-  const renderSettings = () => (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-200/50 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">System Settings</h3>
-        <button 
-          onClick={() => window.location.reload()} 
-          className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200"
-        >
-          Refresh
-        </button>
-      </div>
-      <div className="space-y-4">
-        <p className="text-gray-600">System settings and configuration options will be available here.</p>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-700">
-            Settings functionality is under development. This tab will contain system configuration options, 
-            user management settings, and other administrative controls.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+
 
   return (
     <div className="min-h-screen flex">
@@ -616,7 +595,6 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
-        {activeTab === 'settings' && renderSettings()}
       </div>
 
       {showOrgElectionsModal && (

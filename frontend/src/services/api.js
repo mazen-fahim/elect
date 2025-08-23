@@ -242,12 +242,19 @@ const electionApi = {
   },
 };
 const voterApi = {
-  requestOtp: async ({ electionId, nationalId, phoneNumber }) => {
+  requestOtp: async ({ electionId, nationalId, phoneNumber, eligibleCandidates }) => {
     const params = new URLSearchParams();
     params.append('election_id', electionId);
     if (nationalId) params.append('national_id', nationalId);
     if (phoneNumber) params.append('phone_number', phoneNumber);
-    return apiRequest(`/voters/login/request-otp?${params.toString()}`, { method: 'POST' });
+    
+    // For API-based elections, send eligible candidates in the request body
+    const requestBody = eligibleCandidates ? { eligible_candidates: eligibleCandidates } : {};
+    
+    return apiRequest(`/voters/login/request-otp?${params.toString()}`, { 
+      method: 'POST',
+      body: JSON.stringify(requestBody)
+    });
   },
   verifyOtp: async ({ electionId, code, nationalId }) => {
     const params = new URLSearchParams();

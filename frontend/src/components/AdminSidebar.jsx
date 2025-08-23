@@ -7,7 +7,6 @@ let AdminSidebar = ({ activeTab, setActiveTab }) => {
         { id: 'home', label: 'Home', icon: Vote },
         { id: 'organizations', label: 'Organizations', icon: Users },
         { id: 'notifications', label: 'Notifications', icon: Settings },
-        { id: 'settings', label: 'Settings', icon: Settings },
     ];
 
     return (

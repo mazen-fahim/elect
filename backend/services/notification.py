@@ -663,6 +663,241 @@ class NotificationService:
             additional_data=additional_data_dict
         )
 
+    # Organization Admin Action Notifications
+    async def create_org_admin_election_created_notification(
+        self, 
+        organization_id: int, 
+        election_data: ElectionNotificationData,
+        admin_user_id: int,
+        admin_first_name: str = None,
+        admin_last_name: str = None
+    ) -> NotificationData:
+        """Create notification when an organization admin creates an election"""
+        
+        # Extract values to avoid MissingGreenlet errors
+        election_id = election_data.election_id
+        election_title = election_data.election_title
+        start_time = election_data.start_time
+        
+        admin_name = f"{admin_first_name or 'Unknown'} {admin_last_name or 'Admin'}" if admin_first_name or admin_last_name else "Organization Admin"
+        
+        title = f"Election Created by Admin: {election_title}"
+        message = (
+            f"Organization admin {admin_name} has created a new election: '{election_title}'. "
+            f"The election is scheduled to start at {start_time.strftime('%Y-%m-%d %H:%M:%S UTC') if start_time else 'TBD'}."
+        )
+        
+        additional_data_dict = {
+            "election_id": election_id,
+            "election_title": election_title,
+            "admin_user_id": admin_user_id,
+            "admin_first_name": admin_first_name,
+            "admin_last_name": admin_last_name,
+            "action_type": "election_created_by_admin"
+        }
+        
+        return await self.create_notification(
+            organization_id=organization_id,
+            notification_type=NotificationType.ELECTION_CREATED,
+            title=title,
+            message=message,
+            priority=NotificationPriority.MEDIUM,
+            election_id=election_id,
+            additional_data=additional_data_dict
+        )
+
+    async def create_org_admin_election_updated_notification(
+        self, 
+        organization_id: int, 
+        election_data: ElectionNotificationData,
+        admin_user_id: int,
+        admin_first_name: str = None,
+        admin_last_name: str = None
+    ) -> NotificationData:
+        """Create notification when an organization admin updates an election"""
+        
+        # Extract values to avoid MissingGreenlet errors
+        election_id = election_data.election_id
+        election_title = election_data.election_title
+        
+        admin_name = f"{admin_first_name or 'Unknown'} {admin_last_name or 'Admin'}" if admin_first_name or admin_last_name else "Organization Admin"
+        
+        title = f"Election Updated by Admin: {election_title}"
+        message = (
+            f"Organization admin {admin_name} has updated the election: '{election_title}'. "
+            f"Please review the changes."
+        )
+        
+        additional_data_dict = {
+            "election_id": election_id,
+            "election_title": election_title,
+            "admin_user_id": admin_user_id,
+            "admin_first_name": admin_first_name,
+            "admin_last_name": admin_last_name,
+            "action_type": "election_updated_by_admin"
+        }
+        
+        return await self.create_notification(
+            organization_id=organization_id,
+            notification_type=NotificationType.ELECTION_UPDATED,
+            title=title,
+            message=message,
+            priority=NotificationPriority.MEDIUM,
+            election_id=election_id,
+            additional_data=additional_data_dict
+        )
+
+    async def create_org_admin_election_deleted_notification(
+        self, 
+        organization_id: int, 
+        election_title: str,
+        admin_user_id: int,
+        admin_first_name: str = None,
+        admin_last_name: str = None
+    ) -> NotificationData:
+        """Create notification when an organization admin deletes an election"""
+        
+        admin_name = f"{admin_first_name or 'Unknown'} {admin_last_name or 'Admin'}" if admin_first_name or admin_last_name else "Organization Admin"
+        
+        title = f"Election Deleted by Admin: {election_title}"
+        message = (
+            f"Organization admin {admin_name} has deleted the election: '{election_title}'. "
+            f"This action cannot be undone."
+        )
+        
+        additional_data_dict = {
+            "admin_user_id": admin_user_id,
+            "admin_first_name": admin_first_name,
+            "admin_last_name": admin_last_name,
+            "election_title": election_title,
+            "action_type": "election_deleted_by_admin"
+        }
+        
+        return await self.create_notification(
+            organization_id=organization_id,
+            notification_type=NotificationType.ELECTION_DELETED,
+            title=title,
+            message=message,
+            priority=NotificationPriority.HIGH,
+            additional_data=additional_data_dict
+        )
+
+    async def create_org_admin_candidate_added_notification(
+        self, 
+        organization_id: int, 
+        candidate_data: CandidateNotificationData,
+        admin_user_id: int,
+        admin_first_name: str = None,
+        admin_last_name: str = None
+    ) -> NotificationData:
+        """Create notification when an organization admin adds a candidate"""
+        
+        # Extract values to avoid MissingGreenlet errors
+        candidate_id = candidate_data.candidate_id
+        candidate_name = candidate_data.candidate_name
+        
+        admin_name = f"{admin_first_name or 'Unknown'} {admin_last_name or 'Admin'}" if admin_first_name or admin_last_name else "Organization Admin"
+        
+        title = f"Candidate Added by Admin: {candidate_name}"
+        message = (
+            f"Organization admin {admin_name} has added a new candidate: '{candidate_name}'."
+        )
+        
+        additional_data_dict = {
+            "candidate_id": candidate_id,
+            "candidate_name": candidate_name,
+            "admin_user_id": admin_user_id,
+            "admin_first_name": admin_first_name,
+            "admin_last_name": admin_last_name,
+            "action_type": "candidate_added_by_admin"
+        }
+        
+        return await self.create_notification(
+            organization_id=organization_id,
+            notification_type=NotificationType.CANDIDATE_ADDED,
+            title=title,
+            message=message,
+            priority=NotificationPriority.MEDIUM,
+            candidate_id=candidate_id,
+            additional_data=additional_data_dict
+        )
+
+    async def create_org_admin_candidate_updated_notification(
+        self, 
+        organization_id: int, 
+        candidate_data: CandidateNotificationData,
+        admin_user_id: int,
+        admin_first_name: str = None,
+        admin_last_name: str = None
+    ) -> NotificationData:
+        """Create notification when an organization admin updates a candidate"""
+        
+        # Extract values to avoid MissingGreenlet errors
+        candidate_id = candidate_data.candidate_id
+        candidate_name = candidate_data.candidate_name
+        
+        admin_name = f"{admin_first_name or 'Unknown'} {admin_last_name or 'Admin'}" if admin_first_name or admin_last_name else "Organization Admin"
+        
+        title = f"Candidate Updated by Admin: {candidate_name}"
+        message = (
+            f"Organization admin {admin_name} has updated the candidate: '{candidate_name}'. "
+            f"Please review the changes."
+        )
+        
+        additional_data_dict = {
+            "candidate_id": candidate_id,
+            "candidate_name": candidate_name,
+            "admin_user_id": admin_user_id,
+            "admin_first_name": admin_first_name,
+            "admin_last_name": admin_last_name,
+            "action_type": "candidate_updated_by_admin"
+        }
+        
+        return await self.create_notification(
+            organization_id=organization_id,
+            notification_type=NotificationType.CANDIDATE_UPDATED,
+            title=title,
+            message=message,
+            priority=NotificationPriority.MEDIUM,
+            candidate_id=candidate_id,
+            additional_data=additional_data_dict
+        )
+
+    async def create_org_admin_candidate_deleted_notification(
+        self, 
+        organization_id: int, 
+        candidate_name: str,
+        admin_user_id: int,
+        admin_first_name: str = None,
+        admin_last_name: str = None
+    ) -> NotificationData:
+        """Create notification when an organization admin deletes a candidate"""
+        
+        admin_name = f"{admin_first_name or 'Unknown'} {admin_last_name or 'Admin'}" if admin_first_name or admin_last_name else "Organization Admin"
+        
+        title = f"Candidate Deleted by Admin: {candidate_name}"
+        message = (
+            f"Organization admin {admin_name} has deleted the candidate: '{candidate_name}'. "
+            f"This action cannot be undone."
+        )
+        
+        additional_data_dict = {
+            "admin_user_id": admin_user_id,
+            "admin_first_name": admin_first_name,
+            "admin_last_name": admin_last_name,
+            "candidate_name": candidate_name,
+            "action_type": "candidate_deleted_by_admin"
+        }
+        
+        return await self.create_notification(
+            organization_id=organization_id,
+            notification_type=NotificationType.CANDIDATE_DELETED,
+            title=title,
+            message=message,
+            priority=NotificationPriority.HIGH,
+            additional_data=additional_data_dict
+        )
+
     # Utility methods
     async def mark_as_read(self, notification_id: int, organization_id: int) -> bool:
         """Mark a notification as read"""

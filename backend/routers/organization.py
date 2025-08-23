@@ -7,7 +7,7 @@ from sqlalchemy import select, func, desc, asc
 from core.dependencies import db_dependency, organization_dependency, admin_dependency
 from models.organization import Organization
 from models.election import Election
-from models.user import User
+from models.user import User, UserRole
 from models.organization_admin import OrganizationAdmin
 from models.candidate import Candidate
 from schemas.organization import OrganizationDashboardStats, RecentElection
@@ -38,9 +38,23 @@ async def get_all_organizations(db: db_dependency):
 async def get_organization_dashboard_stats(user: organization_dependency, db: db_dependency):
     """Get dashboard statistics for the authenticated organization"""
 
-    # organization_dependency guarantees `.id` is the owning organization user_id for both
-    # organization and organization_admin roles
-    organization_id = user.id
+    # For organization users, user.id is the organization's user_id
+    # For organization admin users, user.organization_id is the organization's user_id they belong to
+    if user.role == UserRole.organization:
+        organization_id = user.id
+    elif user.role == UserRole.organization_admin:
+        # Get the organization ID from the organization_admins table
+        admin_result = await db.execute(
+            select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id)
+        )
+        admin = admin_result.scalar_one_or_none()
+        if not admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin not found")
+        organization_id = admin.organization_user_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
+
+    print(f"Dashboard stats for organization_id: {organization_id}, user role: {user.role}")
 
     # Totals
     elections_result = await db.execute(

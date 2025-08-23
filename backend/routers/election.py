@@ -263,28 +263,8 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
         organization_id = getattr(current_user, 'organization_id', current_user.id)
         print(f"Organization ID: {organization_id}, User role: {current_user.role}")
 
-        # Strict pre-approval: if requester is organization_admin, stage request only
-        if current_user.role == UserRole.organization_admin:
-            try:
-                payload_json = json.dumps(election_data.model_dump(mode="json"))
-            except Exception as e:
-                print(f"Error serializing election payload: {e}")
-                raise HTTPException(status_code=400, detail=f"Invalid election payload: {e}")
-
-            approval = ApprovalRequest(
-                organization_user_id=organization_id,
-                requested_by_user_id=current_user.id,
-                target_type=ApprovalTargetType.election,
-                action=ApprovalAction.create,
-                target_id="pending",
-                payload=payload_json,
-                status=ApprovalStatus.pending,
-                created_at=datetime.now(timezone.utc),
-            )
-            db.add(approval)
-            await db.commit()
-            await db.refresh(approval)
-            return {"request_id": approval.id, "status": "pending", "message": "Election creation pending approval"}
+        # Organization admin users can create elections directly (no approval required)
+        # They are part of the organization and should have the same privileges
 
         # Create the election
         print("Creating new election object...")
@@ -338,20 +318,8 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
         election_ends_at = new_election.ends_at
         election_created_at = new_election.created_at
 
-        # If the creator is an organization admin, create an approval request
-        if current_user.role == UserRole.organization_admin:
-            print("Creating approval request for organization admin...")
-            approval = ApprovalRequest(
-                organization_user_id=organization_id,
-                requested_by_user_id=current_user.id,
-                target_type=ApprovalTargetType.election,
-                action=ApprovalAction.create,
-                target_id=str(election_id),  # Use stored value instead of new_election.id
-                payload=None,
-                status=ApprovalStatus.pending,
-                created_at=election_created_at,  # Use stored value instead of new_election.created_at
-            )
-            db.add(approval)
+        # Organization admin users can create elections directly (no approval required)
+        # They are part of the organization and should have the same privileges
 
         # Create notification for election creation (moved to after commit to avoid session issues)
         print("Notification creation will be handled after commit")
@@ -386,9 +354,20 @@ async def create_election(election_data: ElectionCreate, db: db_dependency, curr
                 print("Election notification data created successfully")
                 
                 print("Calling create_election_created_notification...")
-                await notification_service.create_election_created_notification(
-                    organization_id=organization_id, election_data=election_notification_data
-                )
+                
+                # Check if the user is an organization admin and create appropriate notification
+                if current_user.role == UserRole.organization_admin:
+                    await notification_service.create_org_admin_election_created_notification(
+                        organization_id=organization_id, 
+                        election_data=election_notification_data,
+                        admin_user_id=current_user.id,
+                        admin_first_name=current_user.first_name,
+                        admin_last_name=current_user.last_name
+                    )
+                else:
+                    await notification_service.create_election_created_notification(
+                        organization_id=organization_id, election_data=election_notification_data
+                    )
                 print("Notification created successfully")
         except Exception as notification_error:
             print(f"Warning: Failed to create election creation notification: {notification_error}")
@@ -484,20 +463,39 @@ async def update_election(
     await db.commit()
     await db.refresh(election)
 
-    # TODO: Create notification for election update (temporarily disabled due to async issues)
-    # if changes_made:
-    #     notification_service = NotificationService(db)
-    #     election_notification_data = ElectionNotificationData(
-    #         election_id=election.id,
-    #         election_title=election.title,
-    #         start_time=election.starts_at,
-    #         end_time=election.ends_at
-    #     )
-    #     await notification_service.create_election_updated_notification(
-    #         organization_id=current_user.id,
-    #         election_data=election_notification_data,
-    #         changes_made=changes_made
-    #     )
+    # Create notification for election update
+    if changes_made:
+        try:
+            # Create a fresh database session for notification service to avoid session conflicts
+            from core.dependencies import SessionLocal
+            async with SessionLocal() as notification_db:
+                notification_service = NotificationService(notification_db)
+                
+                election_notification_data = ElectionNotificationData(
+                    election_id=election.id,
+                    election_title=election.title,
+                    start_time=election.starts_at,
+                    end_time=election.ends_at
+                )
+                
+                # Check if the user is an organization admin and create appropriate notification
+                if current_user.role == UserRole.organization_admin:
+                    await notification_service.create_org_admin_election_updated_notification(
+                        organization_id=organization_id,
+                        election_data=election_notification_data,
+                        admin_user_id=current_user.id,
+                        admin_first_name=current_user.first_name,
+                        admin_last_name=current_user.last_name
+                    )
+                else:
+                    await notification_service.create_election_updated_notification(
+                        organization_id=organization_id,
+                        election_data=election_notification_data,
+                        changes_made=changes_made
+                    )
+        except Exception as notification_error:
+            print(f"Warning: Failed to create election update notification: {notification_error}")
+            # Don't fail the election update if notification creation fails
 
     # Extract all attributes to avoid MissingGreenlet errors
     election_data = {
@@ -635,13 +633,27 @@ async def delete_election(election_id: int, db: db_dependency, current_user: org
         print("Step 6: Creating deletion notification")
         # 7. Create notification after successful deletion (in a separate transaction)
         try:
-            notification_service = NotificationService(db)
-            await notification_service.create_election_deleted_notification(
-                organization_id=getattr(current_user, 'organization_id', current_user.id),
-                election_title=election_title,
-                election_id=None,  # Set to None since election will be deleted
-            )
-            print("Successfully created deletion notification")
+            # Create a fresh database session for notification service to avoid session conflicts
+            from core.dependencies import SessionLocal
+            async with SessionLocal() as notification_db:
+                notification_service = NotificationService(notification_db)
+                
+                # Check if the user is an organization admin and create appropriate notification
+                if current_user.role == UserRole.organization_admin:
+                    await notification_service.create_org_admin_election_deleted_notification(
+                        organization_id=organization_id,
+                        election_title=election_title,
+                        admin_user_id=current_user.id,
+                        admin_first_name=current_user.first_name,
+                        admin_last_name=current_user.last_name
+                    )
+                else:
+                    await notification_service.create_election_deleted_notification(
+                        organization_id=organization_id,
+                        election_title=election_title,
+                        election_id=None,  # Set to None since election will be deleted
+                    )
+                print("Successfully created deletion notification")
         except Exception as notification_error:
             print(f"Warning: Failed to create deletion notification: {notification_error}")
             # Don't fail the deletion if notification creation fails

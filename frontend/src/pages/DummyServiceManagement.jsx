@@ -70,7 +70,12 @@ const DummyServiceManagement = () => {
     const fetchElections = async () => {
         try {
             const response = await api.get('/home/elections');
-            setElections(response.elections || response);
+            const allElections = response.elections || response;
+            
+            // Filter out CSV-based elections, only show API-based ones
+            const apiElections = allElections.filter(election => election.method !== 'csv');
+            
+            setElections(apiElections);
         } catch (error) {
             console.error('Error fetching elections:', error);
         }
