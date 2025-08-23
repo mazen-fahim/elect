@@ -6,7 +6,7 @@ import DeleteConfirmationModal from './DeleteConfirmationModal';
 import ElectionEditModal from './ElectionEditModal';
 import Toast from './Toast';
 
-const ElectionsList = ({ onCreateElection }) => {
+const ElectionsList = ({ onCreateElection, onElectionCreated, refreshTrigger }) => {
     const [elections, setElections] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -25,6 +25,20 @@ const ElectionsList = ({ onCreateElection }) => {
     useEffect(() => {
         fetchElections();
     }, []);
+
+    // Refresh elections when refreshTrigger changes (called from parent after election creation)
+    useEffect(() => {
+        if (refreshTrigger) {
+            fetchElections();
+        }
+    }, [refreshTrigger]);
+
+    // Expose refresh method to parent component
+    useEffect(() => {
+        if (onElectionCreated) {
+            onElectionCreated(fetchElections);
+        }
+    }, [onElectionCreated]);
 
     const fetchElections = async () => {
         try {

@@ -27,11 +27,6 @@ export const useLogin = () => {
       // Invalidate user-related queries
       queryClient.invalidateQueries({ queryKey: ['user'] });
     },
-    onError: (error) => {
-      console.error('Login failed:', error);
-      // Remove any stale token
-      localStorage.removeItem('authToken');
-    },
   });
 };
 

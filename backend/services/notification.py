@@ -1,9 +1,12 @@
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+
+# Type alias for notification data to avoid MissingGreenlet errors
+NotificationData = Dict[str, Any]
 
 from models.notification import Notification, NotificationType, NotificationPriority
 from models.organization import Organization
@@ -35,7 +38,7 @@ class NotificationService:
         candidate_id: Optional[str] = None,
         voter_id: Optional[str] = None,
         additional_data: Optional[Dict[str, Any]] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create a new notification"""
         
         notification_data = NotificationCreate(
@@ -55,14 +58,30 @@ class NotificationService:
         await self.db.commit()
         await self.db.refresh(notification)
         
-        return notification
+        # Extract data to avoid MissingGreenlet errors
+        notification_data = {
+            "id": notification.id,
+            "organization_id": notification.organization_id,
+            "type": notification.type,
+            "priority": notification.priority,
+            "title": notification.title,
+            "message": notification.message,
+            "election_id": notification.election_id,
+            "candidate_id": notification.candidate_id,
+            "voter_id": notification.voter_id,
+            "additional_data": notification.additional_data,
+            "created_at": notification.created_at,
+            "read_at": notification.read_at
+        }
+        
+        return notification_data
 
     # Election-related notifications
     async def create_election_started_notification(
         self, 
         organization_id: int, 
         election_data: ElectionNotificationData
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when an election starts"""
         
         title = f"Election Started: {election_data.election_title}"
@@ -93,7 +112,7 @@ class NotificationService:
         self, 
         organization_id: int, 
         election_data: ElectionNotificationData
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when an election ends"""
         
         if election_data.winner_candidate_id and election_data.winner_candidate_name:
@@ -136,7 +155,7 @@ class NotificationService:
         self, 
         organization_id: int, 
         election_data: ElectionNotificationData
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when an election is created"""
         
         title = f"New Election Created: {election_data.election_title}"
@@ -169,7 +188,7 @@ class NotificationService:
         organization_id: int, 
         election_data: ElectionNotificationData,
         changes_made: List[str]
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when an election is updated"""
         
         title = f"Election Updated: {election_data.election_title}"
@@ -201,7 +220,7 @@ class NotificationService:
         organization_id: int, 
         election_title: str,
         election_id: Optional[int] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when an election is deleted"""
         
         title = f"Election Deleted: {election_title}"
@@ -228,7 +247,7 @@ class NotificationService:
         self, 
         organization_id: int, 
         candidate_data: CandidateNotificationData
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when a candidate is added"""
         
         title = f"New Candidate Added: {candidate_data.candidate_name}"
@@ -260,7 +279,7 @@ class NotificationService:
         self, 
         organization_id: int, 
         candidate_data: CandidateNotificationData
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when a candidate is updated"""
         
         title = f"Candidate Updated: {candidate_data.candidate_name}"
@@ -294,7 +313,7 @@ class NotificationService:
         self, 
         organization_id: int, 
         candidate_data: CandidateNotificationData
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when a candidate is deleted"""
         
         title = f"Candidate Deleted: {candidate_data.candidate_name}"
@@ -328,7 +347,7 @@ class NotificationService:
         organization_id: int, 
         voter_data: VoterNotificationData,
         candidate_name: str
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification when a vote is cast"""
         
         title = f"Vote Cast in {voter_data.election_title}"
@@ -362,7 +381,7 @@ class NotificationService:
         organization_id: int, 
         system_data: SystemNotificationData,
         notification_type: NotificationType = NotificationType.SYSTEM_MAINTENANCE
-    ) -> Notification:
+    ) -> NotificationData:
         """Create system-related notifications"""
         
         if notification_type == NotificationType.SYSTEM_MAINTENANCE:
@@ -403,7 +422,7 @@ class NotificationService:
         success: bool,
         record_count: Optional[int] = None,
         error_message: Optional[str] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification for CSV upload operations"""
         
         if success:
@@ -441,7 +460,7 @@ class NotificationService:
         success: bool,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification for login attempts"""
         
         if success:
@@ -478,7 +497,7 @@ class NotificationService:
         organization_id: int,
         page_name: str,
         ip_address: Optional[str] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification for dashboard access"""
         
         title = f"Dashboard Accessed: {page_name}"
@@ -508,7 +527,7 @@ class NotificationService:
         status: str,  # started, completed, failed
         record_count: Optional[int] = None,
         error_message: Optional[str] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification for bulk operations"""
         
         if status == "started":
@@ -553,7 +572,7 @@ class NotificationService:
         success: bool,
         response_code: Optional[int] = None,
         error_message: Optional[str] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification for API calls"""
         
         if success:
@@ -592,7 +611,7 @@ class NotificationService:
         error_type: str,
         error_message: str,
         context: Optional[Dict[str, Any]] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification for system errors"""
         
         title = f"System Error: {error_type}"
@@ -622,7 +641,7 @@ class NotificationService:
         feature_name: str,
         action: str,
         details: Optional[Dict[str, Any]] = None
-    ) -> Notification:
+    ) -> NotificationData:
         """Create notification for feature usage"""
         
         title = f"Feature Used: {feature_name}"

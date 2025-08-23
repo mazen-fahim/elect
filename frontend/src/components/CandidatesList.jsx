@@ -371,6 +371,14 @@ const CandidatesList = () => {
   const [selected, setSelected] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [rawCandidates, setRawCandidates] = useState([]);
+
+  // Helper function to validate candidate data
+  const validateCandidate = (candidate) => {
+    if (!candidate || typeof candidate !== 'object') return false;
+    if (!candidate.hashed_national_id) return false;
+    return true;
+  };
 
   const fetchAll = async () => {
     try {
@@ -380,7 +388,26 @@ const CandidatesList = () => {
         candidateApi.list({ search: search || undefined, election_id: electionId || undefined })
       ]);
       setElections(elist || []);
-      setCandidates(clist || []);
+      
+      // Store raw candidates for debugging
+      setRawCandidates(clist || []);
+      
+      // Filter out invalid candidates before setting state
+      const validCandidates = (clist || []).filter(validateCandidate);
+      setCandidates(validCandidates);
+      
+      // Debug: Log the candidate data structure
+      console.log('Candidates data:', clist);
+      if (clist && clist.length > 0) {
+        console.log('First candidate structure:', clist[0]);
+        console.log('First candidate keys:', Object.keys(clist[0]));
+        console.log('First candidate hashed_national_id:', clist[0].hashed_national_id);
+        console.log('First candidate name:', clist[0].name);
+      }
+      
+      console.log('Valid candidates count:', validCandidates.length);
+      console.log('Total candidates count:', (clist || []).length);
+      
       setError(null);
     } catch (e) {
       setError('Failed to load candidates');
@@ -475,6 +502,11 @@ const CandidatesList = () => {
             </div>
           )}
         </div>
+        {candidates.length === 0 && rawCandidates.length > 0 && (
+          <div className="mt-2 text-sm text-amber-600 bg-amber-50 p-2 rounded">
+            ⚠️ Some candidates were filtered out due to missing data. Check the console for details.
+          </div>
+        )}
       </div>
 
       {/* Candidates Grid */}
@@ -509,15 +541,15 @@ const CandidatesList = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {candidates.map(c => (
+          {candidates.filter(validateCandidate).map(c => (
             <div 
-              key={c.hashed_national_id} 
+              key={c.hashed_national_id || c.id || Math.random()} 
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg hover:border-blue-300 transition-all cursor-pointer transform hover:scale-[1.02]" 
               onClick={()=>{setSelected(c);setShowDetails(true);}}
             >
               <div className="flex items-start gap-4">
                 {c.photo_url ? (
-                  <img src={c.photo_url} alt={c.name} className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" />
+                  <img src={c.photo_url} alt={c.name || 'Candidate'} className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" />
                 ) : (
                   <div className="w-16 h-16 bg-gradient-to-r from-gray-200 to-gray-300 rounded-full flex items-center justify-center border-2 border-gray-200">
                     <User className="h-8 w-8 text-gray-500" />
@@ -525,21 +557,21 @@ const CandidatesList = () => {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-semibold text-gray-900 truncate text-lg">{c.name}</h4>
+                    <h4 className="font-semibold text-gray-900 truncate text-lg">{c.name || 'Unnamed Candidate'}</h4>
                     {c.symbol_icon_url && (
                       <img src={c.symbol_icon_url} alt="Symbol" className="w-8 h-8 rounded object-cover" />
                     )}
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-gray-600 font-medium">{c.party || 'Independent'}</p>
-                    <p className="text-xs text-gray-500">{c.country}</p>
+                    <p className="text-xs text-gray-500">{c.country || 'Unknown'}</p>
                     {c.description && (
                       <p className="text-sm text-gray-600 line-clamp-2 mt-2">{c.description}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      ID: {c.hashed_national_id.slice(-6)}
+                      ID: {c.hashed_national_id ? c.hashed_national_id.slice(-6) : 'N/A'}
                     </span>
                     {c.district && (
                       <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">

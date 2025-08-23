@@ -1,4 +1,5 @@
 import enum
+import hashlib
 
 
 class Country(enum.Enum):
@@ -203,3 +204,21 @@ class Status(enum.Enum):
     pending = "pending"
     accepted = "accepted"
     rejected = "rejected"
+
+
+def hash_national_id(national_id: str) -> str:
+    """
+    Centralized function to hash national IDs consistently across the entire system.
+    This ensures that CSV upload, voter lookup, and API calls all use the same hashing algorithm.
+    
+    Args:
+        national_id (str): The raw national ID to hash
+        
+    Returns:
+        str: SHA-256 hex digest of the national ID
+    """
+    if not national_id:
+        raise ValueError("National ID cannot be empty")
+    
+    # Standardized hashing: strip whitespace, encode as UTF-8, hash with SHA-256
+    return hashlib.sha256(national_id.strip().encode('utf-8')).hexdigest()

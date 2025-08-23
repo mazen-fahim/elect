@@ -65,9 +65,13 @@ let OrganizationLogin = () => {
             
         } catch (error) {
             console.error('Login error:', error);
+            console.log('Error message:', error.message);
+            console.log('Full error object:', JSON.stringify(error, null, 2));
             
             // Handle specific errors for organization status
-            if (error.message && error.message.includes('pending approval')) {
+            if (error.message && error.message.includes('Please verify your email address')) {
+                setError('Please check your email for the verification link. You need to verify your email address before you can log in.');
+            } else if (error.message && error.message.includes('pending approval')) {
                 setError('Your organization registration is pending approval. Please wait for admin acceptance before logging in.');
             } else if (error.message && error.message.includes('Please wait for admin acceptance')) {
                 setError('Your organization registration is pending approval. Please wait for admin acceptance before logging in.');

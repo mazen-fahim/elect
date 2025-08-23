@@ -1,14 +1,9 @@
-voter_hashed_national_id,phone_number,district
-hash_voter_bus_001,+201444444001,Business District 1 - New Administrative Capital
-hash_voter_bus_002,+201444444002,Business District 1 - New Administrative Capital
-hash_voter_bus_003,+201444444003,Business District 1 - New Administrative Capital
-hash_voter_bus_004,+201444444004,Business District 1 - New Administrative Capital
-hash_voter_bus_005,+201444444005,Business District 2 - New Cairo
-hash_voter_bus_006,+201444444006,Business District 2 - New Cairo
-hash_voter_bus_007,+201444444007,Business District 2 - New Cairo
-hash_voter_bus_008,+201444444008,Business District 3 - Smart Village
-hash_voter_bus_009,+201444444009,Business District 3 - Smart Village
-hash_voter_bus_010,+201444444010,Business District 3 - Smart Village
-hash_voter_bus_011,+201444444011,Business District 1 - New Administrative Capital
-hash_voter_bus_012,+201444444012,Business District 2 - New Cairo
-hash_voter_bus_013,+201444444013,Business District 3 - Smart Village
+national_id,phone_number,business_district
+77777777777778,+201444444001,Business District 1 - New Administrative Capital
+88888888888889,+201444444002,Business District 1 - New Administrative Capital
+99999999999990,+201444444003,Business District 2 - Smart Village
+00000000000001,+201444444004,Business District 2 - Smart Village
+11111111111113,+201444444005,Business District 3 - Sheikh Zayed
+22222222222224,+201444444006,Business District 3 - Sheikh Zayed
+33333333333335,+201444444007,Business District 4 - 6th of October
+44444444444446,+201444444008,Business District 4 - 6th of October

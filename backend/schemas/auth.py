@@ -26,9 +26,8 @@ class RegisterOrganizationRequest(BaseModel):
     country: Country
     address: str | None = None
     description: str | None = None
-    api_endpoint: HttpUrl | None = None
 
-    @field_validator("description", "api_endpoint", mode="before")
+    @field_validator("description", mode="before")
     def empty_string_to_none(cls, v: str):
         if v == "":
             return None
@@ -41,7 +40,6 @@ class RegisterOrganizationRequest(BaseModel):
 class FieldNames(enum.Enum):
     org_name = "name"
     email = "email"
-    api_endpoint = "api_endpoint"
 
 
 class RegisterOrganizationErrorResponse(BaseModel):

@@ -32,10 +32,12 @@ class EmailService:
 
     async def send_verification_email(self, user: User, background_tasks: BackgroundTasks):
         """Send email verification with token"""
+        # Get the email before any database operations to avoid ORM object access issues
+        user_email = user.email
         token_value, expires_at = await self._generate_verification_token(user.id)
         verification_link = f"{settings.FRONTEND_VERIFICATION_URL}?token={token_value}"
         # Use the email as provided; no refresh needed post-commit
-        await self._send_email(user.email, verification_link, expires_at, background_tasks)
+        await self._send_email(user_email, verification_link, expires_at, background_tasks)
 
     async def send_verification_email_with_existing_token(
         self, email: str, token_value: str, expires_at: datetime, background_tasks: BackgroundTasks
@@ -88,6 +90,10 @@ class EmailService:
         verification = result.scalars().first()
 
         if not verification:
+            # Token not found - this could mean:
+            # 1. Token was already used and deleted
+            # 2. Token is invalid
+            # We can't determine which case it is, so we return an error
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification token")
 
         if verification.expires_at < datetime.now(UTC):
@@ -96,6 +102,13 @@ class EmailService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification token has expired")
 
         user = verification.user  # already loaded due to selectinload
+
+        # Check if user is already active
+        if user.is_active:
+            # User is already verified, delete the token and return success
+            await self.db.delete(verification)
+            await self.db.commit()
+            return user
 
         user.is_active = True
 
@@ -111,7 +124,9 @@ class EmailService:
                 result = await self.db.execute(select(OrganizationAdmin).where(OrganizationAdmin.user_id == user.id))
                 org_admin = result.scalar_one_or_none()
                 if org_admin:
-                    org_admin.is_verified = True
+                    # Check if the is_verified column exists before trying to set it
+                    if hasattr(org_admin, 'is_verified'):
+                        org_admin.is_verified = True
         except Exception as _:
             # Do not block email verification if this mapping update fails
             pass
@@ -130,6 +145,7 @@ class EmailService:
     <p>Hello,</p>
     <p>Please verify your email by clicking the link below:</p>
     <p><a href="{verification_link}">Verify Email</a></p>
+    <p>{verification_link}</p>
     <p>This link expires at {expires_at}.</p>
     <br>
     <p>Best regards,<br>Elect Team</p>

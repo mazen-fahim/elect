@@ -16,6 +16,7 @@ import DummyServiceManagement from './pages/DummyServiceManagement';
 import Payment from './pages/Payment';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancel from './pages/PaymentCancel';
+import EmailVerification from './pages/EmailVerification';
 
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
                     <Route path="/org/payment/cancel" element={<PaymentCancel />} />
                     <Route path="/login/org" element={<OrganizationLogin />} />
                     <Route path="/register" element={<OrganizationRegistration />} />
+                    <Route path="/verify-email" element={<EmailVerification />} />
                     <Route path="/elections" element={<PublicElections />} />
                     <Route path="/vote/:electionId" element={<VoterLogin />} />
                     <Route path="/vote/:electionId/voting" element={<VotingPage />} />

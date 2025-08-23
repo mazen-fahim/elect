@@ -208,6 +208,64 @@ async def get_filter_options(db: db_dependency):
     return {"countries": countries, "election_types": election_types, "organizations": organizations}
 
 
+@router.get("/elections/{election_id}")
+async def get_public_election(
+    election_id: int,
+    db: db_dependency,
+):
+    """Get public election details by ID for voters"""
+    # Get election with organization info
+    query = select(
+        Election.id,
+        Election.title,
+        Election.types,
+        Election.starts_at,
+        Election.ends_at,
+        Election.total_vote_count,
+        Election.number_of_candidates,
+        Election.potential_number_of_voters,
+        Election.method,
+        Election.api_endpoint,
+        Organization.name.label("organization_name"),
+        Organization.country.label("organization_country"),
+    ).join(Organization, Election.organization_id == Organization.user_id).where(Election.id == election_id)
+    
+    result = await db.execute(query)
+    election_data = result.fetchone()
+    
+    if not election_data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Election not found")
+    
+    # Determine status based on current time
+    now = datetime.now(timezone.utc)
+    if election_data.starts_at > now:
+        computed_status = ElectionStatus.upcoming
+    elif election_data.ends_at > now:
+        computed_status = ElectionStatus.running
+    else:
+        computed_status = ElectionStatus.finished
+    
+    return {
+        "id": election_data.id,
+        "title": election_data.title,
+        "types": election_data.types,
+        "starts_at": election_data.starts_at,
+        "ends_at": election_data.ends_at,
+        "total_vote_count": election_data.total_vote_count,
+        "number_of_candidates": election_data.number_of_candidates,
+        "potential_number_of_voters": election_data.potential_number_of_voters,
+        "method": election_data.method,
+        "api_endpoint": election_data.api_endpoint,
+        "organization_name": election_data.organization_name,
+        "organization_country": (
+            election_data.organization_country.value
+            if hasattr(election_data.organization_country, "value")
+            else str(election_data.organization_country)
+        ),
+        "status": computed_status,
+    }
+
+
 @router.get("/", response_model=HomeData)
 async def get_home_data(db: db_dependency):
     from sqlalchemy import func

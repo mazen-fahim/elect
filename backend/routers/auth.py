@@ -41,7 +41,7 @@ async def login(login_request: LoginRequest, db: db_dependency):
     auth_service = AuthService(db)
     authenticated_user = await auth_service.authenticate_user(login_request)
 
-    # For organizations, check status before checking if user is active
+    # For organizations, check both status and is_active to provide the most relevant message
     if authenticated_user.role.value == "organization":
         from sqlalchemy.future import select
         from models.organization import Organization
@@ -50,15 +50,23 @@ async def login(login_request: LoginRequest, db: db_dependency):
         organization = org_result.scalar_one_or_none()
         
         if organization:
-            if organization.status.value == "pending":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, 
-                    detail="Your organization registration is currently pending approval. Please wait for admin acceptance before logging in."
-                )
-            elif organization.status.value == "rejected":
+            # If organization is rejected, that takes priority
+            if organization.status.value == "rejected":
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, 
                     detail="Your organization registration has been rejected. Please contact support for assistance or reapply."
+                )
+            # If organization is pending approval AND user is not active (unverified), prioritize email verification
+            elif organization.status.value == "pending" and not authenticated_user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Please verify your email address before logging in. Check your email for the verification link."
+                )
+            # If organization is pending approval but user is active (email verified), show pending approval message
+            elif organization.status.value == "pending" and authenticated_user.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, 
+                    detail="Your organization registration is currently pending approval. Please wait for admin acceptance before logging in."
                 )
             # If organization is approved, continue with normal flow
         else:
@@ -68,9 +76,15 @@ async def login(login_request: LoginRequest, db: db_dependency):
                 detail="Organization not found. Please contact support."
             )
 
-    # Now check if user is active (this will only happen for approved organizations or other user types)
+    # Then check if user is active (email verification) for non-organization users or approved organizations
     if not authenticated_user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="err.login.inactive")
+        if authenticated_user.role.value == "organization":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="Please verify your email address before logging in. Check your email for the verification link."
+            )
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="err.login.inactive")
 
     token = auth_service.create_jwt_token(authenticated_user, timedelta(minutes=settings.JWT_EXPIRE_MINUTES))
 
@@ -178,7 +192,7 @@ async def register_organization(
 async def verify_email(token: str, db: db_dependency):
     email_service = EmailService(db)
     _ = await email_service.verify_email_token(token)
-    return RedirectResponse(url="/email-verified-successfully")
+    return SuccessMessage(success=True, status_code=status.HTTP_200_OK, message="Email verified successfully")
 
 
 @router.post(

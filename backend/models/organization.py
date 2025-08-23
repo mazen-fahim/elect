@@ -20,8 +20,6 @@ class Organization(Base):
 
     status: Mapped[Status] = mapped_column(Enum(Status), default=Status.pending, nullable=False)
 
-    api_endpoint: Mapped[str] = mapped_column(String(200), unique=True, nullable=True)
-
     country: Mapped[Country] = mapped_column(Enum(Country), nullable=False)
 
     address: Mapped[str] = mapped_column(String(500), nullable=True)

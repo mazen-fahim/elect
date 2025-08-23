@@ -18,6 +18,7 @@ let OrganizationDashboard = () => {
     let [showCreateCandidate, setShowCreateCandidate] = useState(false);
     let [isCreatingElection, setIsCreatingElection] = useState(false);
     let [orgElections, setOrgElections] = useState([]);
+    let [electionsRefreshTrigger, setElectionsRefreshTrigger] = useState(0);
     
     // Modal state
     let [modalConfig, setModalConfig] = useState({ isOpen: false, title: '', message: '', type: 'info' });
@@ -180,63 +181,22 @@ let OrganizationDashboard = () => {
                 setShowCreateElection(false);
                 resetForm();
                 
-                // Show success modal with election details for API setup
-                showApiSetupModal(newElection);
+                // Show appropriate success message based on method
+                if (formData.method === 'csv') {
+                    showModal('Success', `Election "${newElection.title}" created successfully with ${newElection.number_of_candidates || 0} candidates and ${newElection.potential_number_of_voters || 0} voters.`, 'success');
+                } else {
+                    // Show API setup modal for API elections
+                    showApiSetupModal(newElection);
+                }
                 
-                // Refresh stats
+                // Refresh stats and elections list
                 refetchStats();
+                setElectionsRefreshTrigger(prev => prev + 1);
+                
             } catch (error) {
                 console.error('Error creating election:', error);
                 
                 let errorMessage = 'Failed to create election. Please try again.';
-                if (error.message && error.message !== 'Server error. Please try again later.') {
-                    errorMessage = error.message;
-                } else if (error.response && error.response.detail) {
-                    errorMessage = error.response.detail;
-                }
-                
-                showModal('Error', errorMessage, 'error');
-            } finally {
-                setIsCreatingElection(false);
-            }
-        };
-
-        let handleCsvElectionCreation = async () => {
-            try {
-                if (!formData.candidatesFile || !formData.votersFile) {
-                    showModal('Missing Files', 'Please select both candidates and voters CSV files.', 'warning');
-                    return;
-                }
-
-                const formDataObj = new FormData();
-                formDataObj.append('title', formData.title);
-                formDataObj.append('types', formData.type);
-                formDataObj.append('starts_at', new Date(formData.startDate).toISOString());
-                formDataObj.append('ends_at', new Date(formData.endDate).toISOString());
-                formDataObj.append('num_of_votes_per_voter', formData.numVotesPerVoter);
-                formDataObj.append('potential_number_of_voters', formData.potentialVoters);
-                formDataObj.append('candidates_file', formData.candidatesFile);
-                formDataObj.append('voters_file', formData.votersFile);
-
-                // Call CSV upload endpoint
-                const { electionApi } = await import('../services/api');
-                const newElection = await electionApi.createWithCsv(formDataObj);
-                
-                // Add to local state
-                addElection(newElection);
-                setShowCreateElection(false);
-                resetForm();
-                
-                // Show success modal for CSV election
-                showModal('Success', `Election "${newElection.title}" created successfully with ${newElection.number_of_candidates || 0} candidates and ${newElection.potential_number_of_voters || 0} voters.`, 'success');
-                
-            } catch (error) {
-                console.error('Error creating election with CSV:', error);
-                console.error('Full error object:', error);
-                console.error('Error response:', error.response);
-                console.error('Error message:', error.message);
-                
-                let errorMessage = 'Failed to create election. Please check your CSV files and try again.';
                 if (error.message && error.message !== 'Server error. Please try again later.') {
                     errorMessage = error.message;
                 } else if (error.response && error.response.detail) {
@@ -443,9 +403,11 @@ let OrganizationDashboard = () => {
                                         required
                                     />
                                     <p className="text-sm text-gray-500 mt-1">
-                                        Required columns: hashed_national_id, name, country, birth_date
+                                        Required columns: national_id, name, country, birth_date
                                         {formData.type === 'district_based' && ', district'}
                                         {formData.type === 'governorate_based' && ', governorate'}
+                                        <br />
+                                        <span className="text-blue-600">Note: Upload raw national IDs - our system will hash them automatically</span>
                                     </p>
                                 </div>
 
@@ -461,9 +423,11 @@ let OrganizationDashboard = () => {
                                         required
                                     />
                                     <p className="text-sm text-gray-500 mt-1">
-                                        Required columns: voter_hashed_national_id, phone_number
+                                        Required columns: national_id, phone_number
                                         {formData.type === 'district_based' && ', district'}
                                         {formData.type === 'governorate_based' && ', governorate'}
+                                        <br />
+                                        <span className="text-blue-600">Note: Upload raw national IDs - our system will hash them automatically</span>
                                     </p>
                                 </div>
 
@@ -674,6 +638,7 @@ let OrganizationDashboard = () => {
                     <ElectionsList 
                         onCreateElection={() => setShowCreateElection(true)}
                         organizationId={organization.id}
+                        refreshTrigger={electionsRefreshTrigger}
                     />
                 )}
 

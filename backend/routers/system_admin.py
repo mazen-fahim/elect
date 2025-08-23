@@ -201,25 +201,17 @@ async def create_organization_admin(
 
         await db.commit()
 
-        # Send verification email (24h expiry per settings) without extra DB IO
+        # Send verification email to the new organization admin
         try:
             from services.email import EmailService
-            from models.verification_token import VerificationToken, TokenType
 
             email_service = EmailService(db)
-            token_res = await db.execute(
-                select(VerificationToken).where(
-                    (VerificationToken.user_id == user_id) & (VerificationToken.type == TokenType.EMAIL_VERIFICATION)
-                )
-            )
-            vtoken = token_res.scalars().first()
-            if vtoken:
-                await email_service.send_verification_email_with_existing_token(
-                    user_email, vtoken.token, vtoken.expires_at, background_tasks
-                )
-                print(f"Queued verification email to {user_email}")
-            else:
-                print(f"Warning: no verification token found for user {user_id}")
+            # Get the user object to pass to send_verification_email
+            user_result = await db.execute(select(User).where(User.id == user_id))
+            user = user_result.scalar_one()
+            
+            await email_service.send_verification_email(user, background_tasks)
+            print(f"Verification email sent to organization admin: {user_email}")
         except Exception as e:
             # Non-fatal: admin can resend later if needed
             print(f"Failed to send verification email to org admin {user_email}: {e}")
