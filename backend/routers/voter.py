@@ -4,7 +4,7 @@ from twilio.rest import Client
 import hashlib
 import logging
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from sqlalchemy.future import select
 from sqlalchemy import and_
 from sqlalchemy.orm import selectinload
@@ -229,6 +229,7 @@ async def request_voter_otp(
     email: str | None = None,
     id: str | None = None,
     phone_number: str | None = None,  # Add phone_number parameter
+    request: Request = None,  # Add request parameter to access body
 ):
     """
     Request OTP for voter login with improved security and consistency.
@@ -241,7 +242,7 @@ async def request_voter_otp(
 
     code = ""  # Define code to be accessible for SMS sending
     voter = None  # Initialize voter variable
-    phone_number = None  # Initialize phone_number variable
+    # Don't override the phone_number parameter - use it directly
     
     # Database operations
     try:
@@ -278,8 +279,17 @@ async def request_voter_otp(
                 if not phone_number:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Organization API did not provide phone number"
+                        detail="Phone number is required for API-based elections"
                     )
+                
+                # Extract eligible candidates from request body if available
+                eligible_candidates = []
+                if request:
+                    try:
+                        body = await request.json()
+                        eligible_candidates = body.get('eligible_candidates', [])
+                    except Exception as e:
+                        logger.warning(f"Failed to parse request body for eligible candidates: {e}")
                 
                 # Create a minimal API response for voter creation
                 # The actual verification was done by the frontend
@@ -289,7 +299,7 @@ async def request_voter_otp(
                 api_response = VoterVerificationResponse(
                     is_eligible=True,
                     phone_number=phone_number,  # Use the phone number from frontend
-                    eligible_candidates=[]  # Will be populated from dummy service
+                    eligible_candidates=eligible_candidates  # Use candidates from dummy service
                 )
                 
                 voter = await api_service.create_voter_from_api_response(
@@ -300,7 +310,8 @@ async def request_voter_otp(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                         detail="Failed to create voter record from API response"
                     )
-                phone_number = voter.phone_number
+                # Use the phone number from the frontend (dummy service response)
+                # Don't override it with voter.phone_number as it might be different
             except HTTPException:
                 raise
             except Exception as e:

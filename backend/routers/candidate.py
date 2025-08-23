@@ -55,7 +55,20 @@ async def get_all_candidates(
     country: Optional[Country] = None,
 ):
     # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
-    organization_id = getattr(current_user, 'organization_id', current_user.id)
+    if current_user.role == UserRole.organization:
+        organization_id = current_user.id
+    elif current_user.role == UserRole.organization_admin:
+        # Get the organization ID from the organization_admins table
+        from models.organization_admin import OrganizationAdmin
+        admin_result = await db.execute(
+            select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
+        )
+        admin = admin_result.scalar_one_or_none()
+        if not admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin not found")
+        organization_id = admin.organization_user_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
 
     # Filter candidates by the current user's organization
     query = (
@@ -128,7 +141,20 @@ async def get_all_candidates(
 @router.get("/{hashed_national_id}", response_model=CandidateRead)
 async def get_candidate_by_id(hashed_national_id: str, db: db_dependency, current_user: organization_dependency):
     # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
-    organization_id = getattr(current_user, 'organization_id', current_user.id)
+    if current_user.role == UserRole.organization:
+        organization_id = current_user.id
+    elif current_user.role == UserRole.organization_admin:
+        # Get the organization ID from the organization_admins table
+        from models.organization_admin import OrganizationAdmin
+        admin_result = await db.execute(
+            select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
+        )
+        admin = admin_result.scalar_one_or_none()
+        if not admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin not found")
+        organization_id = admin.organization_user_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
 
     query = (
         select(Candidate)
@@ -273,37 +299,23 @@ async def create_candidate(
             )
 
         # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
-        org_id = organization_id or getattr(current_user, 'organization_id', current_user.id)
-
-        # If requester is organization_admin, stage the request without creating the entity
-        if current_user.role == UserRole.organization_admin:
-            payload = {
-                "hashed_national_id": hashed_national_id,
-                "name": name,
-                "country": country.value,
-                "birth_date": birth_date.isoformat(),
-                "election_ids": election_ids,
-                "organization_id": org_id,
-                "party": party,
-                "symbol_name": symbol_name,
-                "description": description,
-                "district": district,
-                "governorate": governorate,
-            }
-            approval = ApprovalRequest(
-                organization_user_id=org_id,
-                requested_by_user_id=current_user.id,
-                target_type=ApprovalTargetType.candidate,
-                action=ApprovalAction.create,
-                target_id="pending",
-                payload=json.dumps(payload),
-                status=ApprovalStatus.pending,
-                created_at=datetime.now(timezone.utc),
+        if current_user.role == UserRole.organization:
+            org_id = organization_id or current_user.id
+        elif current_user.role == UserRole.organization_admin:
+            # Get the organization ID from the organization_admins table
+            from models.organization_admin import OrganizationAdmin
+            admin_result = await db.execute(
+                select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
             )
-            db.add(approval)
-            await db.commit()
-            await db.refresh(approval)
-            return {"request_id": approval.id, "status": "pending", "message": "Candidate creation pending approval"}
+            admin = admin_result.scalar_one_or_none()
+            if not admin:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin not found")
+            org_id = admin.organization_user_id
+        else:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
+
+        # Organization admin users can create candidates directly (no approval required)
+        # They are part of the organization and should have the same privileges
 
         image_service = ImageService()
         # Save profile picture (optional)
@@ -311,12 +323,15 @@ async def create_candidate(
         # Save the election symbol icon (optional)
         symbol_icon_url = await image_service.upload_image(symbol_icon)
 
-        # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
-        org_id = organization_id or getattr(current_user, 'organization_id', current_user.id)
+        # Organization ID is already determined above, no need to recalculate
 
+        # Hash the national ID before storing it
+        from core.shared import hash_national_id
+        hashed_id = hash_national_id(hashed_national_id)
+        
         # Create a new Candidate
         new_candidate = Candidate(
-            hashed_national_id=hashed_national_id,
+            hashed_national_id=hashed_id,
             name=name,
             country=country,
             birth_date=birth_date,
@@ -370,6 +385,36 @@ async def create_candidate(
         try:
             await db.commit()
             await db.refresh(new_candidate)
+            
+            # Create notification for candidate creation
+            try:
+                # Create a fresh database session for notification service to avoid session conflicts
+                from core.dependencies import SessionLocal
+                async with SessionLocal() as notification_db:
+                    notification_service = NotificationService(notification_db)
+                    
+                    candidate_notification_data = CandidateNotificationData(
+                        candidate_id=new_candidate.hashed_national_id,
+                        candidate_name=new_candidate.name
+                    )
+                    
+                    # Check if the user is an organization admin and create appropriate notification
+                    if current_user.role == UserRole.organization_admin:
+                        await notification_service.create_org_admin_candidate_added_notification(
+                            organization_id=org_id,
+                            candidate_data=candidate_notification_data,
+                            admin_user_id=current_user.id,
+                            admin_first_name=current_user.first_name,
+                            admin_last_name=current_user.last_name
+                        )
+                    else:
+                        await notification_service.create_candidate_added_notification(
+                            organization_id=org_id,
+                            candidate_data=candidate_notification_data
+                        )
+            except Exception as notification_error:
+                print(f"Warning: Failed to create candidate creation notification: {notification_error}")
+                # Don't fail the candidate creation if notification creation fails
             
             # Load organization relationship to avoid MissingGreenlet errors
             org_result = await db.execute(
@@ -517,13 +562,32 @@ async def update_candidate(
 
     # Create notification for candidate update
     if changes_made:
-        notification_service = NotificationService(db)
-        candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate_id_for_notification, candidate_name=candidate_name_for_notification, changes_made=changes_made
-        )
-        await notification_service.create_candidate_updated_notification(
-            organization_id=organization_id, candidate_data=candidate_notification_data
-        )
+        try:
+            # Create a fresh database session for notification service to avoid session conflicts
+            from core.dependencies import SessionLocal
+            async with SessionLocal() as notification_db:
+                notification_service = NotificationService(notification_db)
+                
+                candidate_notification_data = CandidateNotificationData(
+                    candidate_id=candidate_id_for_notification, candidate_name=candidate_name_for_notification, changes_made=changes_made
+                )
+                
+                # Check if the user is an organization admin and create appropriate notification
+                if current_user.role == UserRole.organization_admin:
+                    await notification_service.create_org_admin_candidate_updated_notification(
+                        organization_id=organization_id,
+                        candidate_data=candidate_notification_data,
+                        admin_user_id=current_user.id,
+                        admin_first_name=current_user.first_name,
+                        admin_last_name=current_user.last_name
+                    )
+                else:
+                    await notification_service.create_candidate_updated_notification(
+                        organization_id=organization_id, candidate_data=candidate_notification_data
+                    )
+        except Exception as notification_error:
+            print(f"Warning: Failed to create candidate update notification: {notification_error}")
+            # Don't fail the candidate update if notification creation fails
 
     return candidate_response_data
 
@@ -854,13 +918,28 @@ async def delete_candidate(
 
     # Create notification for candidate deletion
     try:
-        notification_service = NotificationService(db)
-        candidate_notification_data = CandidateNotificationData(
-            candidate_id=candidate_id_for_notification, candidate_name=candidate_name_for_notification
-        )
-        await notification_service.create_candidate_deleted_notification(
-            organization_id=organization_id, candidate_data=candidate_notification_data
-        )
+        # Create a fresh database session for notification service to avoid session conflicts
+        from core.dependencies import SessionLocal
+        async with SessionLocal() as notification_db:
+            notification_service = NotificationService(notification_db)
+            
+            candidate_notification_data = CandidateNotificationData(
+                candidate_id=candidate_id_for_notification, candidate_name=candidate_name_for_notification
+            )
+            
+            # Check if the user is an organization admin and create appropriate notification
+            if current_user.role == UserRole.organization_admin:
+                await notification_service.create_org_admin_candidate_deleted_notification(
+                    organization_id=organization_id,
+                    candidate_name=candidate_name_for_notification,
+                    admin_user_id=current_user.id,
+                    admin_first_name=current_user.first_name,
+                    admin_last_name=current_user.last_name
+                )
+            else:
+                await notification_service.create_candidate_deleted_notification(
+                    organization_id=organization_id, candidate_data=candidate_notification_data
+                )
     except Exception as e:
         print(f"Warning: Failed to create notification: {e}")
 
@@ -871,7 +950,20 @@ async def create_candidates_bulk(
 ):
     """Create multiple candidates at once"""
     # Get the organization ID (for organization admins, this is the org they manage; for org owners, it's their own ID)
-    organization_id = getattr(current_user, 'organization_id', current_user.id)
+    if current_user.role == UserRole.organization:
+        organization_id = current_user.id
+    elif current_user.role == UserRole.organization_admin:
+        # Get the organization ID from the organization_admins table
+        from models.organization_admin import OrganizationAdmin
+        admin_result = await db.execute(
+            select(OrganizationAdmin).where(OrganizationAdmin.user_id == current_user.id)
+        )
+        admin = admin_result.scalar_one_or_none()
+        if not admin:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization admin not found")
+        organization_id = admin.organization_user_id
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization privileges required")
 
     created_candidates = []
 
@@ -885,9 +977,13 @@ async def create_candidates_bulk(
         if existing_candidate:
             continue  # Skip existing candidates or raise error based on requirements
 
+        # Hash the national ID before storing it
+        from core.shared import hash_national_id
+        hashed_id = hash_national_id(candidate_data.hashed_national_id)
+        
         # Create new candidate
         new_candidate = Candidate(
-            hashed_national_id=candidate_data.hashed_national_id,
+            hashed_national_id=hashed_id,
             name=candidate_data.name,
             district=candidate_data.district,
             governorate=candidate_data.governorate,
@@ -908,6 +1004,45 @@ async def create_candidates_bulk(
 
     for candidate in created_candidates:
         await db.refresh(candidate)
+
+    # Create notification for bulk candidate creation
+    if created_candidates:
+        try:
+            # Create a fresh database session for notification service to avoid session conflicts
+            from core.dependencies import SessionLocal
+            async with SessionLocal() as notification_db:
+                notification_service = NotificationService(notification_db)
+                
+                # Create a summary notification for bulk creation
+                candidate_count = len(created_candidates)
+                candidate_names = [c.name for c in created_candidates[:3]]  # First 3 names
+                if candidate_count > 3:
+                    candidate_names.append(f"and {candidate_count - 3} more")
+                
+                # Check if the user is an organization admin and create appropriate notification
+                if current_user.role == UserRole.organization_admin:
+                    # For bulk creation, we'll create a single notification with summary
+                    await notification_service.create_org_admin_candidate_added_notification(
+                        organization_id=organization_id,
+                        candidate_data=CandidateNotificationData(
+                            candidate_id="bulk_creation",
+                            candidate_name=f"Bulk creation of {candidate_count} candidates: {', '.join(candidate_names)}"
+                        ),
+                        admin_user_id=current_user.id,
+                        admin_first_name=current_user.first_name,
+                        admin_last_name=current_user.last_name
+                    )
+                else:
+                    # For regular users, create bulk operation notification
+                    await notification_service.create_bulk_operation_notification(
+                        organization_id=organization_id,
+                        operation_type="candidate_bulk_imported",
+                        items_count=candidate_count,
+                        operation_details=f"Created {candidate_count} candidates"
+                    )
+        except Exception as notification_error:
+            print(f"Warning: Failed to create bulk candidate creation notification: {notification_error}")
+            # Don't fail the bulk creation if notification creation fails
 
     # Extract all attributes to avoid MissingGreenlet errors
     candidates_data = []

@@ -27,13 +27,74 @@ let OrganizationDashboard = () => {
     // Fetch dashboard stats from API
     const { data: dashboardStats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useOrganizationDashboardStats();
 
-    // Fetch elections for this organization
+    // Refresh stats when component mounts to ensure we have the latest data
     useEffect(() => {
         if (user && user.organizationId) {
-            const filteredElections = elections.filter((e) => e.organizationId === user.organizationId.toString());
-            setOrgElections(filteredElections);
+            refetchStats();
         }
-    }, [elections, user]);
+    }, [user, refetchStats]);
+
+    // Debug: Log when stats change
+    useEffect(() => {
+        if (dashboardStats) {
+            console.log('Dashboard Stats API Response:', dashboardStats);
+        }
+    }, [dashboardStats]);
+
+    // Debug: Log user object changes
+    useEffect(() => {
+        console.log('User object updated:', {
+            id: user?.id,
+            role: user?.role,
+            organizationId: user?.organizationId,
+            organizationName: user?.organizationName,
+            email: user?.email
+        });
+    }, [user]);
+
+    // Debug: Log elections data
+    useEffect(() => {
+        console.log('Elections data updated:', {
+            totalElections: elections.length,
+            electionsWithOrgId: elections.filter(e => e.organizationId).length,
+            sampleElections: elections.slice(0, 3).map(e => ({
+                id: e.id,
+                title: e.title,
+                organizationId: e.organizationId
+            }))
+        });
+    }, [elections]);
+
+    // Fetch elections for this organization
+    useEffect(() => {
+        if (user) {
+            // Get all elections for the organization, regardless of who created them
+            let targetOrgId = user.organizationId?.toString();
+            
+            // If we're an organization admin and don't have organizationId, try to find it from elections
+            if (!targetOrgId && user.role === 'organization_admin' && elections.length > 0) {
+                const firstElection = elections.find(e => e.organizationId);
+                if (firstElection) {
+                    targetOrgId = firstElection.organizationId;
+                }
+            }
+            
+            // If still no organization ID, try to get it from the URL or find any organization
+            if (!targetOrgId) {
+                targetOrgId = id;
+            }
+            
+            if (targetOrgId) {
+                const filteredElections = elections.filter((e) => e.organizationId === targetOrgId);
+                setOrgElections(filteredElections);
+                console.log('Organization elections loaded:', {
+                    targetOrgId,
+                    totalElections: elections.length,
+                    orgElections: filteredElections.length
+                });
+            }
+        }
+    }, [elections, user, id]);
 
     // Helper function to show modals
     let showModal = (title, message, type = 'info') => {
@@ -78,8 +139,23 @@ let OrganizationDashboard = () => {
     }
 
     // Use the logged-in user's organization data instead of URL params
-    const userOrgId = user.organizationId?.toString();
+    let userOrgId = user.organizationId?.toString();
     const urlOrgId = id;
+
+    // If we're an organization admin and don't have organizationId, try to find it from elections
+    if (!userOrgId && user.role === 'organization_admin' && elections.length > 0) {
+        const firstElection = elections.find(e => e.organizationId);
+        if (firstElection) {
+            userOrgId = firstElection.organizationId;
+            console.log('Using organization ID from elections for admin:', userOrgId);
+        }
+    }
+
+    // If still no organization ID, use the URL param
+    if (!userOrgId) {
+        userOrgId = urlOrgId;
+        console.log('Using organization ID from URL for admin:', userOrgId);
+    }
 
     // Check if the URL organization ID matches the user's organization
     if (userOrgId && urlOrgId && userOrgId !== urlOrgId) {
@@ -159,6 +235,7 @@ let OrganizationDashboard = () => {
 
                     // Call CSV upload endpoint
                     newElection = await electionApi.createWithCsv(formDataObj);
+                    console.log('CSV election creation response:', newElection);
                 } else {
                     // Handle API method
                     const electionData = {
@@ -172,8 +249,9 @@ let OrganizationDashboard = () => {
                         api_endpoint: formData.voterEligibilityUrl,
                     };
 
-                    // Call API endpoint for election creation
-                    newElection = await electionApi.create(electionData);
+                                    // Call API endpoint for election creation
+                newElection = await electionApi.create(electionData);
+                console.log('Election creation response:', newElection);
                 }
                 
                 // Add to local state
@@ -500,18 +578,80 @@ let OrganizationDashboard = () => {
             );
         }
 
-        const stats = dashboardStats || {
-            total_elections: orgElections.length,
-            total_candidates: 0,
-            total_votes: 0,
-            recent_elections: orgElections.slice(0, 5)
-        };
-
-        // Calculate total candidates if not provided by API
-        if (stats.total_candidates === 0) {
-            stats.total_candidates = candidates.filter(c => 
-                orgElections.some(e => e.candidates && e.candidates.includes(c.id))
-            ).length;
+        // For organization admins, always try to use API stats first, then fallback to organization-wide data
+        let stats = dashboardStats;
+        
+        // Debug logging
+        console.log('Dashboard Stats Debug:', {
+            dashboardStats,
+            userRole: user.role,
+            organizationId: user.organizationId,
+            urlOrgId: id,
+            totalElections: elections.length,
+            orgElections: orgElections.length,
+            candidates: candidates.length,
+            statsError,
+            statsLoading
+        });
+        
+        if (!stats) {
+            // Fallback: Calculate stats from all organization data
+            // For organization admins, we need to get all elections from their organization
+            let targetOrgId = user.organizationId?.toString();
+            
+            // If we're an organization admin and don't have organizationId, try to find it from elections
+            if (!targetOrgId && user.role === 'organization_admin' && elections.length > 0) {
+                // Find the first election and use its organizationId as a fallback
+                const firstElection = elections.find(e => e.organizationId);
+                if (firstElection) {
+                    targetOrgId = firstElection.organizationId;
+                    console.log('Using fallback organization ID from elections:', targetOrgId);
+                }
+            }
+            
+            // If still no organization ID, try to get it from the URL or find any organization
+            if (!targetOrgId) {
+                // Try to get from URL params
+                targetOrgId = id;
+                console.log('Using organization ID from URL params:', targetOrgId);
+            }
+            
+            // For organization admin users, prioritize using the URL parameter (which is working for other tabs)
+            if (user.role === 'organization_admin' && id) {
+                targetOrgId = id;
+                console.log('Organization admin: Using organization ID from URL:', targetOrgId);
+            }
+            
+            if (targetOrgId) {
+                const allOrgElections = elections.filter(e => e.organizationId === targetOrgId);
+                const allOrgCandidates = candidates.filter(c => 
+                    allOrgElections.some(e => e.candidates && e.candidates.includes(c.id))
+                );
+                
+                stats = {
+                    total_elections: allOrgElections.length,
+                    total_candidates: allOrgCandidates.length,
+                    total_votes: allOrgElections.reduce((sum, e) => sum + (e.total_vote_count || 0), 0),
+                    recent_elections: allOrgElections
+                        .sort((a, b) => new Date(b.created_at || b.starts_at) - new Date(a.created_at || a.starts_at))
+                        .slice(0, 5)
+                };
+                
+                console.log('Fallback Stats Calculated:', {
+                    targetOrgId,
+                    allOrgElections: allOrgElections.length,
+                    stats
+                });
+            } else {
+                // If we still can't find the organization, show zeros
+                stats = {
+                    total_elections: 0,
+                    total_candidates: 0,
+                    total_votes: 0,
+                    recent_elections: []
+                };
+                console.log('Could not determine organization ID for fallback stats');
+            }
         }
 
         return (

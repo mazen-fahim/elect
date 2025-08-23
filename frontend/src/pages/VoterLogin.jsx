@@ -70,7 +70,8 @@ let VoterLogin = () => {
                 const otpResponse = await voterApi.requestOtp({ 
                     electionId, 
                     nationalId,
-                    phoneNumber: dummyServiceData.phone_number // Pass phone number from dummy service
+                    phoneNumber: dummyServiceData.phone_number, // Pass phone number from dummy service
+                    eligibleCandidates: dummyServiceData.eligible_candidates // Pass eligible candidates from dummy service
                 });
                 
                 console.log('Step 3 COMPLETED: OTP request successful:', otpResponse);
