@@ -213,75 +213,82 @@ let OrganizationDashboard = () => {
             }
             
             try {
-                let newElection;
+                // Calculate payment amount based on voter count
+                let voterCount = 0;
                 
                 if (formData.method === 'csv') {
-                    // Handle CSV upload
-                    if (!formData.candidatesFile || !formData.votersFile) {
-                        showModal('Missing Files', 'Please select both candidates and voters CSV files.', 'warning');
+                    // For CSV elections, count rows in voters file
+                    if (!formData.votersFile) {
+                        showModal('Missing Files', 'Please select a voters CSV file.', 'warning');
                         setIsCreatingElection(false);
                         return;
                     }
-
-                    const formDataObj = new FormData();
-                    formDataObj.append('title', formData.title);
-                    formDataObj.append('types', formData.type);
-                    formDataObj.append('starts_at', new Date(formData.startDate).toISOString());
-                    formDataObj.append('ends_at', new Date(formData.endDate).toISOString());
-                    formDataObj.append('num_of_votes_per_voter', formData.numVotesPerVoter);
-                    formDataObj.append('potential_number_of_voters', formData.potentialVoters);
-                    formDataObj.append('candidates_file', formData.candidatesFile);
-                    formDataObj.append('voters_file', formData.votersFile);
-
-                    // Call CSV upload endpoint
-                    newElection = await electionApi.createWithCsv(formDataObj);
-                    console.log('CSV election creation response:', newElection);
+                    
+                    const text = await formData.votersFile.text();
+                    const lines = text.split('\n').filter(line => line.trim() !== '');
+                    voterCount = Math.max(1, lines.length - 1); // Subtract 1 for header row
                 } else {
-                    // Handle API method
-                    const electionData = {
-                        title: formData.title,
-                        types: 'api_managed',
-                        starts_at: new Date(formData.startDate).toISOString(),
-                        ends_at: new Date(formData.endDate).toISOString(),
-                        num_of_votes_per_voter: formData.numVotesPerVoter,
-                        potential_number_of_voters: formData.potentialVoters,
-                        method: 'api',
-                        api_endpoint: formData.voterEligibilityUrl,
-                    };
-
-                                    // Call API endpoint for election creation
-                newElection = await electionApi.create(electionData);
-                console.log('Election creation response:', newElection);
+                    // For API elections, use the potentialVoters field
+                    voterCount = Math.max(1, Number(formData.potentialVoters || 0));
                 }
                 
-                // Add to local state
-                addElection(newElection);
-                setShowCreateElection(false);
-                resetForm();
+                // Calculate payment amount: voters/10 EGP with 30 EGP minimum
+                const baseAmount = Math.max(30, Math.ceil(voterCount / 10));
                 
-                // Show appropriate success message based on method
+                // Store election data for post-payment creation
+                const pendingElection = {
+                    title: formData.title,
+                    types: formData.method === 'api' ? 'api_managed' : formData.type,
+                    starts_at: new Date(formData.startDate).toISOString(),
+                    ends_at: new Date(formData.endDate).toISOString(),
+                    num_of_votes_per_voter: formData.numVotesPerVoter,
+                    potential_number_of_voters: voterCount,
+                    method: formData.method,
+                    api_endpoint: formData.method === 'api' ? formData.voterEligibilityUrl : null
+                };
+                
+                // For CSV elections, store file content for post-payment recreation
                 if (formData.method === 'csv') {
-                    showModal('Success', `Election "${newElection.title}" created successfully with ${newElection.number_of_candidates || 0} candidates and ${newElection.potential_number_of_voters || 0} voters.`, 'success');
-                } else {
-                    // Show API setup modal for API elections
-                    showApiSetupModal(newElection);
+                    try {
+                        const candidatesContent = await formData.candidatesFile.text();
+                        const votersContent = await formData.votersFile.text();
+                        
+                        pendingElection.candidatesFile = {
+                            name: formData.candidatesFile.name,
+                            content: candidatesContent
+                        };
+                        pendingElection.votersFile = {
+                            name: formData.votersFile.name,
+                            content: votersContent
+                        };
+                        
+                        console.log('OrganizationDashboard: CSV file content stored for post-payment recreation');
+                    } catch (fileError) {
+                        console.error('Error reading CSV files:', fileError);
+                        showModal('Error', 'Failed to read CSV files. Please try again.', 'error');
+                        setIsCreatingElection(false);
+                        return;
+                    }
                 }
                 
-                // Refresh stats and elections list
-                refetchStats();
-                setElectionsRefreshTrigger(prev => prev + 1);
+                // Store in localStorage for post-payment retrieval
+                localStorage.setItem('pendingElectionData', JSON.stringify(pendingElection));
+                localStorage.setItem('afterPaymentCreateElection', '1');
+                localStorage.setItem('plannedVoters', String(voterCount));
+                
+                // Redirect to payment page
+                const params = new URLSearchParams({
+                    purpose: 'election-voters',
+                    voters: String(voterCount),
+                    amount: String(baseAmount),
+                    locked: '1'
+                });
+                
+                window.location.href = `/org/payment?${params.toString()}`;
                 
             } catch (error) {
-                console.error('Error creating election:', error);
-                
-                let errorMessage = 'Failed to create election. Please try again.';
-                if (error.message && error.message !== 'Server error. Please try again later.') {
-                    errorMessage = error.message;
-                } else if (error.response && error.response.detail) {
-                    errorMessage = error.response.detail;
-                }
-                
-                showModal('Error', errorMessage, 'error');
+                console.error('Error preparing payment flow:', error);
+                showModal('Error', 'Failed to prepare payment. Please try again.', 'error');
             } finally {
                 setIsCreatingElection(false);
             }
@@ -348,7 +355,7 @@ let OrganizationDashboard = () => {
                             </div>
                         </div>
 
-                        {/* Votes per Voter - Expected Voters */}
+                        {/* Votes per Voter - Expected Voters (only show Expected Voters for API method) */}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Votes per Voter</label>
@@ -361,17 +368,22 @@ let OrganizationDashboard = () => {
                                     required
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Expected Voters</label>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={formData.potentialVoters}
-                                    onChange={(e) => setFormData({ ...formData, potentialVoters: parseInt(e.target.value) })}
-                                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                    required
-                                />
-                            </div>
+                            {formData.method === 'api' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Expected Voters</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={formData.potentialVoters}
+                                        onChange={(e) => setFormData({ ...formData, potentialVoters: parseInt(e.target.value) })}
+                                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        required={formData.method === 'api'}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        Pricing: EGP {Math.max(30, Math.ceil(formData.potentialVoters / 10))} (minimum 30 EGP)
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         {/* Method Selection */}
@@ -523,6 +535,24 @@ let OrganizationDashboard = () => {
                             </div>
                         )}
 
+                        {/* Pricing Information */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <h4 className="font-medium text-blue-900 mb-2">💰 Pricing Information</h4>
+                            <div className="text-sm text-blue-800">
+                                {formData.method === 'api' ? (
+                                    <p>
+                                        <strong>API Elections:</strong> EGP {Math.max(30, Math.ceil((formData.potentialVoters || 0) / 10))} 
+                                        (minimum 30 EGP) based on your expected voter count.
+                                    </p>
+                                ) : (
+                                    <p>
+                                        <strong>CSV Elections:</strong> Fee will be calculated based on the number of eligible voters in your CSV file 
+                                        (EGP voters/10, minimum 30 EGP).
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="flex space-x-4">
                             <button
                                 type="submit"
@@ -534,10 +564,10 @@ let OrganizationDashboard = () => {
                                 {isCreatingElection ? (
                                     <>
                                         <Loader2 className="h-5 w-5 animate-spin inline mr-2" />
-                                        Creating...
+                                        Redirecting to Payment...
                                     </>
                                 ) : (
-                                    'Create Election'
+                                    'Next: Payment'
                                 )}
                             </button>
                             <button

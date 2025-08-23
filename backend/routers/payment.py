@@ -49,8 +49,9 @@ async def get_payment_config():
     """
     key = getattr(settings, "STRIPE_SECRET_KEY", None)
     mode = "test" if key and str(key).startswith("sk_test_") else ("live" if key and str(key).startswith("sk_live_") else "test")
-    # Minimum amount (in EGP) to satisfy Stripe's 200 fils requirement with buffer
-    min_egp = 0
+    # Minimum amount (in EGP) to satisfy Stripe's requirements
+    # 30 EGP minimum for elections to avoid Stripe complaints about low amounts
+    min_egp = 30
     return {"mode": mode, "currency": "EGP", "product_name": "Wallet Top-up", "min_egp": min_egp}
 
 
@@ -60,7 +61,15 @@ async def create_checkout_session(
     user: user_dependency,
     db: db_dependency,
 ):
-    # Allow any positive amount; Stripe will validate currency-specific minimums.
+    # Validate minimum amount for elections
+    if checkout_data.purpose == "election-voters":
+        min_amount_egp = 30  # 30 EGP minimum for elections
+        amount_egp = checkout_data.amount / 100  # Convert from piasters to EGP
+        if amount_egp < min_amount_egp:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Amount too low for elections. Minimum required: EGP {min_amount_egp}, provided: EGP {amount_egp:.2f}"
+            )
 
     api_key = _require_stripe_key()
     stripe.api_key = api_key

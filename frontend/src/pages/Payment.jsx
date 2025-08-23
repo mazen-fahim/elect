@@ -61,9 +61,20 @@ const Payment = () => {
           } catch {}
         }
         if (voterNum > 0) {
-          const amt = voterNum * 0.1; // 0.1 EGP per voter
+          // Use the amount parameter if provided, otherwise calculate based on voters
+          let amt;
+          if (a && !Number.isNaN(Number(a))) {
+            // Use the amount from URL parameter (calculated by OrganizationDashboard)
+            amt = Number(a);
+          } else {
+            // Fallback calculation: 0.1 EGP per voter
+            amt = voterNum * 0.1;
+          }
+          
+          // Apply minimum cap of 30 EGP for elections
+          const minElectionEgp = 30;
+          amt = Math.max(amt, minElectionEgp);
           initAmount = Number(amt.toFixed(2));
-          if (initAmount < minEgp) initAmount = minEgp;
           setAmountEgp(String(initAmount));
           setProductName(`Election voter capacity for ${voterNum} voters`);
           setVotersCount(voterNum);
