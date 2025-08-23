@@ -6,24 +6,11 @@ import { authApi, electionApi } from '../services/api';
 let ELECTION_CREATION_IN_PROGRESS = false;
 let ELECTION_ALREADY_CREATED = false;
 
-// Debug function to reset global state (available in console)
-window.resetPaymentState = () => {
-  ELECTION_CREATION_IN_PROGRESS = false;
-  ELECTION_ALREADY_CREATED = false;
-  sessionStorage.removeItem('electionCreated');
-  console.log('PaymentSuccess: Global state reset for debugging');
-};
-
 const PaymentSuccess = () => {
   const navigate = useNavigate();
   const hasExecuted = useRef(false);
 
   useEffect(() => {
-    console.log('PaymentSuccess: Component mounted, checking state...');
-    console.log('PaymentSuccess: hasExecuted.current:', hasExecuted.current);
-    console.log('PaymentSuccess: ELECTION_CREATION_IN_PROGRESS:', ELECTION_CREATION_IN_PROGRESS);
-    console.log('PaymentSuccess: ELECTION_ALREADY_CREATED:', ELECTION_ALREADY_CREATED);
-    
     // Prevent execution if this component instance has already executed
     if (hasExecuted.current) {
       console.log('PaymentSuccess: Component already executed, skipping');
@@ -110,6 +97,9 @@ const PaymentSuccess = () => {
         console.log('PaymentSuccess: Creating election:', { 
           title: payload.title, 
           method: payload.method,
+          csvSessionId: payload.csvSessionId,
+          candidatesFileName: payload.candidatesFileName,
+          votersFileName: payload.votersFileName,
           payloadKeys: Object.keys(payload)
         });
         
@@ -123,7 +113,11 @@ const PaymentSuccess = () => {
             starts_at: payload.starts_at,
             ends_at: payload.ends_at,
             num_of_votes_per_voter: payload.num_of_votes_per_voter,
-            potential_number_of_voters: payload.potential_number_of_voters
+            potential_number_of_voters: payload.potential_number_of_voters,
+            hasCandidatesBase64: !!payload.candidatesFileBase64,
+            hasVotersBase64: !!payload.votersFileBase64,
+            candidatesFileName: payload.candidatesFileName,
+            votersFileName: payload.votersFileName
           });
           
           // CSV-based creation
@@ -135,28 +129,47 @@ const PaymentSuccess = () => {
           formData.append('num_of_votes_per_voter', payload.num_of_votes_per_voter);
           formData.append('potential_number_of_voters', payload.potential_number_of_voters);
           
-          // Recreate File objects from stored data
-          if (payload.candidatesFile && payload.votersFile) {
+          if (payload.candidatesFileBase64 && payload.votersFileBase64) {
+            console.log('PaymentSuccess: Converting base64 data back to files');
+            
             try {
-              // Convert stored file data back to File objects
-              const candidatesFile = new File([payload.candidatesFile.content], payload.candidatesFile.name, { type: 'text/csv' });
-              const votersFile = new File([payload.votersFile.content], payload.votersFile.name, { type: 'text/csv' });
+              // Convert base64 back to File objects
+              const candidatesArrayBuffer = Uint8Array.from(atob(payload.candidatesFileBase64), c => c.charCodeAt(0));
+              const votersArrayBuffer = Uint8Array.from(atob(payload.votersFileBase64), c => c.charCodeAt(0));
+              
+              const candidatesFile = new File([candidatesArrayBuffer], payload.candidatesFileName || 'candidates.csv', { type: 'text/csv' });
+              const votersFile = new File([votersArrayBuffer], payload.votersFileName || 'voters.csv', { type: 'text/csv' });
+              
+              console.log('PaymentSuccess: File objects created from base64:', {
+                candidatesFile: candidatesFile.name,
+                candidatesFileSize: candidatesFile.size,
+                votersFile: votersFile.name,
+                votersFileSize: votersFile.size
+              });
               
               formData.append('candidates_file', candidatesFile);
               formData.append('voters_file', votersFile);
               
-              console.log('PaymentSuccess: File objects recreated from stored data');
+              // Log FormData contents
+              console.log('PaymentSuccess: FormData contents:');
+              for (let [key, value] of formData.entries()) {
+                console.log('PaymentSuccess: FormData key:', key, 'value:', value);
+              }
+              
               console.log('PaymentSuccess: Calling CSV election API...');
               created = await electionApi.createWithCsv(formData);
               console.log('PaymentSuccess: CSV election API response:', created);
               
-            } catch (fileError) {
-              console.error('PaymentSuccess: Error recreating files:', fileError);
-              throw new Error('Failed to recreate CSV files for election creation');
+            } catch (conversionError) {
+              console.error('PaymentSuccess: Error converting base64 to files:', conversionError);
+              throw new Error('Failed to convert CSV data back to files');
             }
           } else {
-            console.error('PaymentSuccess: Missing CSV file data');
-            throw new Error('Missing CSV file data for election creation');
+            console.error('PaymentSuccess: Missing base64 CSV data:', {
+              candidatesFileBase64: !!payload.candidatesFileBase64,
+              votersFileBase64: !!payload.votersFileBase64
+            });
+            throw new Error('Missing CSV file data');
           }
         } else {
           // API-based creation
@@ -217,23 +230,11 @@ const PaymentSuccess = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 text-center">
-        <div className="mb-4">
-          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-            <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-        </div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">Payment Successful!</h2>
-        <p className="text-gray-600 mb-4">Your payment has been processed successfully.</p>
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-3/4 mx-auto mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
-        </div>
-        <p className="text-sm text-gray-500 mt-4">Creating your election...</p>
-      </div>
+    <div className="max-w-xl mx-auto bg-white rounded-xl shadow p-6 text-center">
+      <h2 className="text-2xl font-bold mb-2">Payment Successful</h2>
+      <p className="text-gray-600">
+        Your payment has been processed successfully. Creating your election automatically...
+      </p>
     </div>
   );
 };
