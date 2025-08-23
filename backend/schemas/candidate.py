@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, field_validator
 
 from core.shared import Country
 
@@ -17,11 +17,27 @@ class CandidateBase(BaseModel):
     country: Country
     party: str | None = None
     organization_id: int
-    symbol_icon_url: HttpUrl | None = None
+    symbol_icon_url: str | None = None
     symbol_name: str | None = None
-    photo_url: HttpUrl | None = None
-    birth_date: datetime
+    photo_url: str | None = None
+    birth_date: datetime | None = None
     description: str | None = None
+
+    @field_validator('symbol_icon_url', 'photo_url', mode='before')
+    @classmethod
+    def validate_url_fields(cls, v):
+        """Convert empty strings to None for URL fields"""
+        if v == "":
+            return None
+        return v
+
+    @field_validator('birth_date', mode='before')
+    @classmethod
+    def validate_birth_date(cls, v):
+        """Handle None birth_date values"""
+        if v == "" or v is None:
+            return None
+        return v
 
 
 class CandidateCreate(CandidateBase):
@@ -50,6 +66,22 @@ class CandidateUpdate(BaseModel):
     photo_url: str | None = None
     birth_date: datetime | None = None
     description: str | None = None
+
+    @field_validator('symbol_icon_url', 'photo_url', mode='before')
+    @classmethod
+    def validate_url_fields(cls, v):
+        """Convert empty strings to None for URL fields"""
+        if v == "":
+            return None
+        return v
+
+    @field_validator('birth_date', mode='before')
+    @classmethod
+    def validate_birth_date(cls, v):
+        """Handle None birth_date values"""
+        if v == "" or v is None:
+            return None
+        return v
 
 
 class CandidateRead(CandidateBase):

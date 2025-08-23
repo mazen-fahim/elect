@@ -115,8 +115,8 @@ async def get_all_candidates(
             "description": candidate.description,
             "district": candidate.district,
             "governorate": candidate.governorate,
-            "symbol_icon_url": candidate.symbol_icon_url,
-            "photo_url": candidate.photo_url,
+            "symbol_icon_url": candidate.symbol_icon_url if candidate.symbol_icon_url else None,
+            "photo_url": candidate.photo_url if candidate.photo_url else None,
             "created_at": candidate.created_at,
             "participations": [
                 {
@@ -185,8 +185,8 @@ async def get_candidate_by_id(hashed_national_id: str, db: db_dependency, curren
         "description": candidate.description,
         "district": candidate.district,
         "governorate": candidate.governorate,
-        "symbol_icon_url": candidate.symbol_icon_url,
-        "photo_url": candidate.photo_url,
+        "symbol_icon_url": candidate.symbol_icon_url if candidate.symbol_icon_url else None,
+        "photo_url": candidate.photo_url if candidate.photo_url else None,
         "created_at": candidate.created_at,
         "participations": [
             {
@@ -245,8 +245,8 @@ async def get_candidates_by_election(election_id: int, db: db_dependency, curren
             "description": candidate.description,
             "district": candidate.district,
             "governorate": candidate.governorate,
-            "symbol_icon_url": candidate.symbol_icon_url,
-            "photo_url": candidate.photo_url,
+            "symbol_icon_url": candidate.symbol_icon_url if candidate.symbol_icon_url else None,
+            "photo_url": candidate.photo_url if candidate.photo_url else None,
             "created_at": candidate.created_at,
             "participations": [
                 {
@@ -434,8 +434,8 @@ async def create_candidate(
                 "description": new_candidate.description,
                 "district": new_candidate.district,
                 "governorate": new_candidate.governorate,
-                "symbol_icon_url": new_candidate.symbol_icon_url,
-                "photo_url": new_candidate.photo_url,
+                "symbol_icon_url": new_candidate.symbol_icon_url if new_candidate.symbol_icon_url else None,
+                "photo_url": new_candidate.photo_url if new_candidate.photo_url else None,
                 "created_at": new_candidate.created_at,
                 "participations": [],
                 "organization": {
@@ -550,8 +550,8 @@ async def update_candidate(
         "description": candidate.description,
         "district": candidate.district,
         "governorate": candidate.governorate,
-        "symbol_icon_url": candidate.symbol_icon_url,
-        "photo_url": candidate.photo_url,
+        "symbol_icon_url": candidate.symbol_icon_url if candidate.symbol_icon_url else None,
+        "photo_url": candidate.photo_url if candidate.photo_url else None,
         "created_at": candidate.created_at,
         "participations": participations_data,
         "organization": organization_data
@@ -716,8 +716,8 @@ async def update_candidate_with_files(
         "description": candidate.description,
         "district": candidate.district,
         "governorate": candidate.governorate,
-        "symbol_icon_url": candidate.symbol_icon_url,
-        "photo_url": candidate.photo_url,
+        "symbol_icon_url": candidate.symbol_icon_url if candidate.symbol_icon_url else None,
+        "photo_url": candidate.photo_url if candidate.photo_url else None,
         "created_at": candidate.created_at,
         "participations": participations_data,
         "organization": organization_data
@@ -853,8 +853,8 @@ async def set_candidate_participations(
         "description": candidate.description,
         "district": candidate.district,
         "governorate": candidate.governorate,
-        "symbol_icon_url": candidate.symbol_icon_url,
-        "photo_url": candidate.photo_url,
+        "symbol_icon_url": candidate.symbol_icon_url if candidate.symbol_icon_url else None,
+        "photo_url": candidate.photo_url if candidate.photo_url else None,
         "created_at": candidate.created_at,
         "participations": participations_data,
         "organization": organization_data
@@ -1058,8 +1058,8 @@ async def create_candidates_bulk(
             "description": candidate.description,
             "district": candidate.district,
             "governorate": candidate.governorate,
-            "symbol_icon_url": candidate.symbol_icon_url,
-            "photo_url": candidate.photo_url,
+            "symbol_icon_url": candidate.symbol_icon_url if candidate.symbol_icon_url else None,
+            "photo_url": candidate.photo_url if candidate.photo_url else None,
             "created_at": candidate.created_at,
             "participations": [
                 {

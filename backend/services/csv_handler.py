@@ -24,16 +24,31 @@ class CSVHandler:
         Expected columns: national_id, name, district, governorate, country, 
                          party, symbol_name, birth_date, description
         """
+        print(f"DEBUG: CSVHandler.process_candidates_csv called with file: {file.filename}")
+        
         if not file.filename.endswith('.csv'):
             raise HTTPException(status_code=400, detail="File must be a CSV")
         
         content = await file.read()
-        df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+        print(f"DEBUG: Read {len(content)} bytes from candidates file")
+        
+        try:
+            df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+            print(f"DEBUG: CSV parsed successfully, columns: {list(df.columns)}")
+            print(f"DEBUG: CSV has {len(df)} rows")
+            print(f"DEBUG: First few rows of data:")
+            for i in range(min(3, len(df))):
+                print(f"DEBUG: Row {i}: {dict(df.iloc[i])}")
+        except Exception as e:
+            print(f"DEBUG: Error parsing CSV: {str(e)}")
+            print(f"DEBUG: CSV content preview: {content[:200]}...")
+            raise HTTPException(status_code=400, detail=f"Error parsing CSV file: {str(e)}")
         
         # Validate required columns
         required_columns = ['national_id', 'name', 'country', 'birth_date']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
+            print(f"DEBUG: Missing required columns: {missing_columns}")
             raise HTTPException(
                 status_code=400, 
                 detail=f"Missing required columns: {', '.join(missing_columns)}"
@@ -42,6 +57,8 @@ class CSVHandler:
         candidates = []
         for index, row in df.iterrows():
             try:
+                print(f"DEBUG: Processing candidate row {index + 1}")
+                
                 # Validate country
                 country_value = row['country']
                 if country_value not in [c.value for c in Country]:
@@ -72,13 +89,16 @@ class CSVHandler:
                     'photo_url': str(row.get('photo_url', '')) if pd.notna(row.get('photo_url')) else None,
                 }
                 candidates.append(candidate_data)
+                print(f"DEBUG: Successfully processed candidate row {index + 1}")
                 
             except Exception as e:
+                print(f"DEBUG: Error processing candidate row {index + 1}: {str(e)}")
                 raise HTTPException(
                     status_code=400, 
                     detail=f"Error processing row {index + 1}: {str(e)}"
                 )
         
+        print(f"DEBUG: Successfully processed {len(candidates)} candidates")
         return candidates
     
     @staticmethod
@@ -87,16 +107,31 @@ class CSVHandler:
         Process uploaded voters CSV file
         Expected columns: national_id, phone_number, governorate
         """
+        print(f"DEBUG: CSVHandler.process_voters_csv called with file: {file.filename}")
+        
         if not file.filename.endswith('.csv'):
             raise HTTPException(status_code=400, detail="File must be a CSV")
         
         content = await file.read()
-        df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+        print(f"DEBUG: Read {len(content)} bytes from voters file")
+        
+        try:
+            df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+            print(f"DEBUG: Voters CSV parsed successfully, columns: {list(df.columns)}")
+            print(f"DEBUG: Voters CSV has {len(df)} rows")
+            print(f"DEBUG: First few rows of voters data:")
+            for i in range(min(3, len(df))):
+                print(f"DEBUG: Row {i}: {dict(df.iloc[i])}")
+        except Exception as e:
+            print(f"DEBUG: Error parsing voters CSV: {str(e)}")
+            print(f"DEBUG: Voters CSV content preview: {content[:200]}...")
+            raise HTTPException(status_code=400, detail=f"Error parsing voters CSV file: {str(e)}")
         
         # Validate required columns
         required_columns = ['national_id', 'phone_number']
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
+            print(f"DEBUG: Missing required voter columns: {missing_columns}")
             raise HTTPException(
                 status_code=400, 
                 detail=f"Missing required columns: {', '.join(missing_columns)}"
@@ -105,6 +140,8 @@ class CSVHandler:
         voters = []
         for index, row in df.iterrows():
             try:
+                print(f"DEBUG: Processing voter row {index + 1}")
+                
                 # Get raw national ID and hash it
                 raw_national_id = str(row['national_id']).strip()
                 if not raw_national_id:
@@ -119,13 +156,16 @@ class CSVHandler:
                     'governorate': str(row.get('governorate', '')) if pd.notna(row.get('governorate')) else None,
                 }
                 voters.append(voter_data)
+                print(f"DEBUG: Successfully processed voter row {index + 1}")
                 
             except Exception as e:
+                print(f"DEBUG: Error processing voter row {index + 1}: {str(e)}")
                 raise HTTPException(
                     status_code=400, 
                     detail=f"Error processing row {index + 1}: {str(e)}"
                 )
         
+        print(f"DEBUG: Successfully processed {len(voters)} voters")
         return voters
     
     @staticmethod
