@@ -1233,3 +1233,59 @@ async def _create_voters_from_processed_data(db, election_id, voters_data):
 
     print(f"DEBUG: _create_voters_from_processed_data completed, created {voters_count} voters")
     return voters_count
+
+
+@router.post("/sync-statuses", status_code=status.HTTP_200_OK)
+async def sync_election_statuses(
+    db: db_dependency,
+    current_user: organization_dependency,
+):
+    """Manually sync election statuses for the current organization.
+    This is useful for testing and immediate updates."""
+    
+    try:
+        from services.election_status import ElectionStatusService
+        
+        # Get the organization ID
+        organization_id = getattr(current_user, 'organization_id', current_user.id)
+        
+        # Get all elections for this organization
+        elections_result = await db.execute(
+            select(Election).where(Election.organization_id == organization_id)
+        )
+        elections = elections_result.scalars().all()
+        
+        updated_count = 0
+        now = datetime.now(timezone.utc)
+        
+        for election in elections:
+            # Check if election should start
+            if election.status == "upcoming" and now >= election.starts_at:
+                election.status = "running"
+                updated_count += 1
+                print(f"Election {election.id} ({election.title}) status updated to running")
+            
+            # Check if election should end
+            elif election.status == "running" and now > election.ends_at:
+                election.status = "finished"
+                updated_count += 1
+                print(f"Election {election.id} ({election.title}) status updated to finished")
+        
+        # Commit changes if any were made
+        if updated_count > 0:
+            await db.commit()
+            print(f"Manually updated {updated_count} election statuses")
+        
+        return {
+            "message": f"Election statuses synced successfully",
+            "updated_count": updated_count,
+            "total_elections": len(elections)
+        }
+        
+    except Exception as e:
+        print(f"Error syncing election statuses: {str(e)}")
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync election statuses: {str(e)}"
+        )

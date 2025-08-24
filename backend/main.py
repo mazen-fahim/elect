@@ -38,12 +38,14 @@ async def lifespan(app: FastAPI):
     await FastAPILimiter.init(redis_connection)
     print("Application startup...")
 
-    # Scheduler disabled (apscheduler not installed)
+    # Start the election status scheduler
+    start_election_status_scheduler()
 
     try:
         yield
     finally:
-        # Scheduler disabled
+        # Stop the election status scheduler
+        stop_election_status_scheduler()
 
         await redis_connection.close()
         print("Application shutdown.")
