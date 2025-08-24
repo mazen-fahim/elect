@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Calendar, Users, Vote, Eye, Plus, Edit, Trash2, AlertCircle } from 'lucide-react';
+import { Search, Filter, Calendar, Users, Vote, Eye, Plus, Edit, Trash2, AlertCircle, RefreshCw } from 'lucide-react';
 import api from '../services/api';
 import ElectionDetails from './ElectionDetails';
 import DeleteConfirmationModal from './DeleteConfirmationModal';
@@ -97,6 +97,21 @@ const ElectionsList = ({ onCreateElection, onElectionCreated, refreshTrigger }) 
         setElectionToEdit(election);
         setShowEditModal(true);
         setShowDetails(false);
+    };
+
+    const handleSyncStatuses = async () => {
+        try {
+            setLoading(true);
+            await api.post('/election/sync-statuses');
+            showToast('success', 'Election statuses synced successfully');
+            // Refresh elections to show updated statuses
+            await fetchElections();
+        } catch (error) {
+            console.error('Error syncing election statuses:', error);
+            showToast('error', 'Failed to sync election statuses');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleEditSuccess = async () => {
@@ -209,13 +224,23 @@ const ElectionsList = ({ onCreateElection, onElectionCreated, refreshTrigger }) 
             {/* Header */}
             <div className="flex justify-between items-center">
                 <h2 className="text-2xl font-bold text-gray-900">Elections</h2>
-                <button
-                    onClick={onCreateElection}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2"
-                >
-                    <Plus className="h-4 w-4" />
-                    <span>Create Election</span>
-                </button>
+                <div className="flex items-center space-x-3">
+                    <button
+                        onClick={handleSyncStatuses}
+                        className="px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-all duration-200 flex items-center space-x-2"
+                        title="Sync election statuses with current time"
+                    >
+                        <RefreshCw className="h-4 w-4" />
+                        <span>Sync Statuses</span>
+                    </button>
+                    <button
+                        onClick={onCreateElection}
+                        className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2"
+                    >
+                        <Plus className="h-4 w-4" />
+                        <span>Create Election</span>
+                    </button>
+                </div>
             </div>
 
             {/* Search and Filters */}

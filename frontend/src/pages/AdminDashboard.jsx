@@ -239,6 +239,20 @@ const AdminDashboard = () => {
     setElectionDetails(details);
   };
 
+  const handleSyncAllElectionStatuses = async () => {
+    try {
+      setLoading(true);
+      await systemAdminApi.syncAllElectionStatuses();
+      // Refresh data to show updated statuses
+      await loadActiveElections();
+      await loadDashboardStats();
+    } catch (error) {
+      console.error('Failed to sync election statuses:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'overview') {
       loadDashboardStats();
@@ -340,7 +354,16 @@ const AdminDashboard = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Active Elections</h3>
-        <button onClick={loadActiveElections} className="px-3 py-2 text-sm bg-gray-100 rounded-lg">Refresh</button>
+        <div className="flex items-center space-x-2">
+          <button 
+            onClick={handleSyncAllElectionStatuses}
+            className="px-3 py-2 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+            title="Sync all election statuses across the system"
+          >
+            Sync Statuses
+          </button>
+          <button onClick={loadActiveElections} className="px-3 py-2 text-sm bg-gray-100 rounded-lg">Refresh</button>
+        </div>
       </div>
       {loading ? (
         <div className="flex items-center justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>

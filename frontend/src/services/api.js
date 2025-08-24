@@ -469,6 +469,10 @@ const systemAdminApi = {
       : '/SystemAdmin/notifications/organizations';
     return apiRequest(endpoint);
   },
+
+  syncAllElectionStatuses: async () => {
+    return apiRequest('/SystemAdmin/elections/sync-statuses', { method: 'POST' });
+  },
 };
 
 // Dummy Service endpoints for testing API-based elections

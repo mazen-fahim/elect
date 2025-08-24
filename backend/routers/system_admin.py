@@ -673,3 +673,30 @@ async def organizations_activity_feed(
         }
         for (org, created_at) in rows
     ]
+
+
+@router.post("/elections/sync-statuses", status_code=status.HTTP_200_OK)
+async def sync_all_election_statuses(
+    db: db_dependency,
+    _: admin_dependency,
+):
+    """Admin-only: Manually sync all election statuses across the system.
+    This is useful for fixing inconsistencies and immediate updates."""
+    
+    try:
+        from services.election_status import ElectionStatusService
+        
+        # Use the existing service method
+        updated_count = await ElectionStatusService.sync_all_election_statuses(db)
+        
+        return {
+            "message": "All election statuses synced successfully",
+            "updated_count": updated_count
+        }
+        
+    except Exception as e:
+        print(f"Error syncing all election statuses: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync election statuses: {str(e)}"
+        )

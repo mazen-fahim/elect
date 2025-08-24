@@ -11,7 +11,7 @@ services:
       - postgres
       - redis
     env_file:
-      - .env.example
+      - .env
     # this is unnecessary for this backend container (but for development sake just in case)
     stdin_open: true
     tty: true
